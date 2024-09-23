@@ -6,7 +6,7 @@ const reactiveMap = new WeakMap();
 
 function createReactiveObject(target:any){
     // 统一做判断，响应式对象必须是对象才行
-    if(isObject(target)) {
+    if(!isObject(target)) {
         return target;
     }
     if(target[ReactiveFlags.IS_REACTIVE]) { // 保证无法被重复代理

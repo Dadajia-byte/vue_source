@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
 
 
 const target = args._[0] || "reactivity"; // 默认打包reactivity
-const format = args.f || "iife"; // 打包后的模块规范
+const format = args.f || "esm"; // 打包后的模块规范
 // console.log(target, format);
 
 // node中的esm模块没有__dirname
