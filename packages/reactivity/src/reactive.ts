@@ -4,7 +4,7 @@ import { ReactiveFlags,mutableHandlers } from "./baseHandler";
 // 用于记录我们的 代理后的结果可以复用
 const reactiveMap = new WeakMap();
 
-function createReactiveObject(target){
+function createReactiveObject(target:any){
     // 统一做判断，响应式对象必须是对象才行
     if(isObject(target)) {
         return target;
@@ -23,6 +23,6 @@ function createReactiveObject(target){
     return proxy
 }
 
-export function reactive(target){
+export function reactive(target:any){
     return createReactiveObject(target);
 }
