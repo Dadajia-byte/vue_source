@@ -1,21 +1,15 @@
-# Basic
-*.tmp
-*.swp
+# 根目录 node_modules
+/node_modules
+
+# 子项目 node_modules
+packages/*/node_modules
+
+# 忽略构建文件
+/dist
+packages/*/dist
+
+# 忽略日志文件
+*.log
+
+# 忽略系统文件
 .DS_Store
-
-# Node.js
-node_modules
-npm-debug.log
-yarn.lock
-yarn-error.log
-
-# Build artifacts
-dist/
-build/
-
-# IDEs and editors
-.idea/
-*.code-workspace
-
-# Environment variables
-.env*

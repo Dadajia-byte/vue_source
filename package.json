@@ -12,7 +12,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "postcss": "^8.4.47"
+    "postcss": "^8.4.47",
+    "vue": "^3.5.8"
   },
   "devDependencies": {
     "esbuild": "^0.23.1",
