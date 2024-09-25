@@ -24,9 +24,8 @@ export function track(target,key) {
             )
         }
         trackEffect(activeEffect,dep); // 将当前的effect放入到dep（映射表）中，后续可以根据值得变化触发此dep中变化       
-        console.log(targetMap);
-        
     }
+    
 }
 // 触发更新
 export function trigger(target,key,newValue,oldVlue) {
@@ -39,9 +38,5 @@ export function trigger(target,key,newValue,oldVlue) {
         // 如果确实有对应的依赖，则执行其中的effect函数
         triggerEffect(dep)
     }
+    
 }
-
-/* 
-    利用Map进行依赖收集
-    Map:{obj:{属性:Map:{effect,effect,...}}}
-*/
