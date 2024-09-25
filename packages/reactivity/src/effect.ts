@@ -4,7 +4,12 @@ export function effect(fn:Function,options?) {
         _effect.run();
     });
     _effect.run(); // 创建完成后立即执行一次
-    return _effect;
+    if(options) {
+        Object.assign(_effect,options); // 用用户传递的配置，覆盖默认配置
+    }
+    const runner = _effect.run.bind(_effect);
+    runner.effect = _effect;
+    return runner;
 }
 
 export let activeEffect;
