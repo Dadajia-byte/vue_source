@@ -26,3 +26,7 @@ function createReactiveObject(target:any){
 export function reactive(target:any){
     return createReactiveObject(target);
 }
+
+export function toReactive(value) { // 如果传入的值是对象，就返回代理后的对象，否则就返回本身
+    return isObject(value) ? reactive(value) : value;
+}

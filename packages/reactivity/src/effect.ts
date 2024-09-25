@@ -1,4 +1,4 @@
-export function effect(fn:Function,options?) {
+export function effect(fn:Function,options?:object) {
     // 创建一个effect，只要依赖的属性发生改变就要执行回调（类似react中的useEffect？）
     const _effect = new ReactiveEffect(fn,()=>{
         _effect.run();
