@@ -29,6 +29,7 @@ function postCleanEffect(effect) {
 class ReactiveEffect {
     _trackId = 0; // 用于记录当前effect执行了几次
     deps = []; //用于记录存放了哪些依赖
+    _running= 0; // 用于记录此时的effect是否正在执行避免递归调用
     _depsLength = 0;
     public active = true;// 默认创建的effect是响应式的
     // fn是用户编写的函数，scheduler依赖数据发生变化触发的回调函数-> run
@@ -44,6 +45,7 @@ class ReactiveEffect {
 
             // 每次effect执行前，应当将上次的依赖清空，不然会越来越多
             preCleanEffect(this.deps);
+            this._running++;
             // 如果是激活的，则需要做依赖收集     
             return this.fn(); // 触发传入effect里的函数
         } finally {
@@ -86,8 +88,11 @@ export function trackEffect(effect,dep) {
 
 export function triggerEffect(dep) { // 将属性里收集的所有effect依次执行
     for (const effect of dep.keys()) {
-        if(effect.scheduler) {
-            effect.scheduler(); // 执行回调函数，重新运行run
+        if(!effect._running) { // 如果不是正在执行，才能执行
+            if(effect.scheduler) {
+                effect.scheduler(); // 执行回调函数，重新运行run
+            } 
         }
+
     }
 }
