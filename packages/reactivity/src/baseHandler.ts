@@ -1,4 +1,6 @@
+import { isObject } from "@vue/shared";
 import { track,trigger } from "./reactEffect";
+import { reactive } from "vue";
 export enum ReactiveFlags {
     IS_REACTIVE = '__v_isReactive' // 命名如此恶心的其中一个原因就是怕有些吊人给个对象的属性重了
 }
@@ -14,7 +16,11 @@ export const mutableHandlers:ProxyHandler<any> = {
         // 依赖收集 todo...
         track(target,key) // 收集这个对象上的属性，和effect关联到一起
         // return target[key] 这样写有问题，如果是个函数里面有调用this，这时this指向的普通对象而不是代理后的对象，此时里面的this.属性不会触发get
-        return Reflect.get(target,key,recevier)
+        let res = Reflect.get(target,key,recevier)  
+        if(isObject(res)) { // 如果key是对象的话，需要继续返回proxy以进行代理
+            return reactive(res)
+        } 
+        return res
     },
     set(target,key,value,recevier){
         

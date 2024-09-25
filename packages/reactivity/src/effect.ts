@@ -49,6 +49,7 @@ class ReactiveEffect {
             // 如果是激活的，则需要做依赖收集     
             return this.fn(); // 触发传入effect里的函数
         } finally {
+            this._running--;
             // activeEffect = undefined; // 本来想着收集完依赖之后就将这个全局变量置空，但是考虑到如果effect嵌套了，内部effect执行完就置空了，如果还有接下来的逻辑那就尴尬了收集不了剩下的依赖了
             postCleanEffect(activeEffect)
             activeEffect = lastEffect; // 将上次最后的effect保存，待此次结束后返回避免丢失
