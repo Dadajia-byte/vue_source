@@ -1,10 +1,7 @@
 import { isObject } from "@vue/shared";
 import { track,trigger } from "./reactEffect";
 import { reactive } from "vue";
-export enum ReactiveFlags {
-    IS_REACTIVE = '__v_isReactive' // 命名如此恶心的其中一个原因就是怕有些吊人给个对象的属性重了
-}
-
+import {ReactiveFlags} from './constants'
 
 export const mutableHandlers:ProxyHandler<any> = {
     get(target,key,recevier){ // receiver 是生成的代理对象
@@ -23,7 +20,6 @@ export const mutableHandlers:ProxyHandler<any> = {
         return res
     },
     set(target,key,value,recevier){
-        
         // 找到属性 让对应的 effect 重新执行
         let oldVlue = target[key]; // 老值
         let result= Reflect.set(target,key,value,recevier)
@@ -31,7 +27,6 @@ export const mutableHandlers:ProxyHandler<any> = {
             trigger(target,key,value,oldVlue)
         }
         // 触发更新
-        
         return result
     }
 }

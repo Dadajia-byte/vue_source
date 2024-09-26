@@ -1,3 +1,5 @@
+import { DirtyLevels } from "./constants";
+
 export function effect(fn:Function,options?:object) {
     // 创建一个effect，只要依赖的属性发生改变就要执行回调（类似react中的useEffect？）
     const _effect = new ReactiveEffect(fn,()=>{
@@ -26,16 +28,27 @@ function postCleanEffect(effect) {
         effect.deps.length = effect._depsLength;
     }
 }
-class ReactiveEffect {
+export class ReactiveEffect {
     _trackId = 0; // 用于记录当前effect执行了几次
     deps = []; //用于记录存放了哪些依赖
     _running= 0; // 用于记录此时的effect是否正在执行避免递归调用
     _depsLength = 0;
+    _dirtyLevel = DirtyLevels.Dirty;
     public active = true;// 默认创建的effect是响应式的
     // fn是用户编写的函数，scheduler依赖数据发生变化触发的回调函数-> run
     constructor(public fn:Function,public scheduler:Function) {
     }
+
+    public get dirty() {
+        return this._dirtyLevel === DirtyLevels.Dirty;
+    }
+
+    public set dirty(v) {
+        this._dirtyLevel = v?DirtyLevels.Dirty:DirtyLevels.NoDirty;
+    }
+    
     run() {
+        this._dirtyLevel = DirtyLevels.NoDirty; // 每次运行后，effect变为no_dirty
         if(!this.active) {
             return this.fn() // 不是激活的，执行后什么都不做
         }  
@@ -89,6 +102,11 @@ export function trackEffect(effect,dep) {
 
 export function triggerEffect(dep) { // 将属性里收集的所有effect依次执行
     for (const effect of dep.keys()) {
+
+        // 当前这个值是不脏的，但是触发更新需要将值变为脏值
+        if(effect._dirtyLevel<DirtyLevels.Dirty) {
+            effect._dirtyLevel = DirtyLevels.Dirty;
+        }
         if(!effect._running) { // 如果不是正在执行，才能执行
             if(effect.scheduler) {
                 effect.scheduler(); // 执行回调函数，重新运行run
