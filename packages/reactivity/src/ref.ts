@@ -1,3 +1,4 @@
+import { isObject } from "@vue/shared";
 import { activeEffect, trackEffect, triggerEffect } from "./effect";
 import { createDep } from "./reactEffect";
 import {toReactive} from  "./reactive"
@@ -14,7 +15,11 @@ class RefImpl {
     public _value; // 用于保存ref的值
     public dep; // 用于收集对应的effect
     constructor(public rawValue) {
-        this._value = toReactive(rawValue)
+        if(isObject(rawValue)) {
+            this._value = toReactive(rawValue) 
+        } else {
+            this._value = rawValue
+        }
     }
     
     get value() {
@@ -45,4 +50,8 @@ export function triggerRefValue(ref) {
         triggerEffect(dep) // 触发依赖更新   
     }
 
+}
+
+export function isRef(value) {
+    return !!(value && value.__v_isRef)
 }

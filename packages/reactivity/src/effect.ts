@@ -115,3 +115,4 @@ export function triggerEffect(dep) { // 将属性里收集的所有effect依次�
 
     }
 }
+
