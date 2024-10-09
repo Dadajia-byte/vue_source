@@ -5,5 +5,4 @@ export enum ReactiveFlags {
 export enum DirtyLevels {
     Dirty=4, // 脏值，意味着取值要运行计算属性
     NoDirty = 0, // 不脏，不允行
-
 }

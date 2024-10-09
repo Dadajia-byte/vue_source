@@ -54,10 +54,22 @@ function doWatch(source,cb,{deep,immediate}) {
     }
 
     let oldValue;
+
+    let clean;
+    const onCleanup = (fn) =>{ // 清理副作用函数，常用于解决竞态问题
+        clean =()=>{ 
+            fn();
+            clean = undefined;
+        };   
+    }
+    
     const job = ()=>{
         if(cb) {
             const newValue = effect.run(); // 这里的run是fn返回的结果，即getter的返回结果，若是source非函数则getter就是一个函数触发并返回被watch属性的getter；若是函数，则直接就是这个函数触发getter并返回自己的值作为结果（()=>xxx.abc）
-            cb(newValue,oldValue);
+            if(clean) {
+                clean(); // 在执行回调前，先调用上一次的清理操作进行操作
+            }
+            cb(newValue,oldValue,onCleanup);
             oldValue = newValue;
         } else { // 没有cb说明是watchEffect，所以第一个source一定是函数，且不用那种返回了所以也不需要newValue之类得了，只需要执行job也就是source函数即可
             effect.run()
@@ -75,5 +87,6 @@ function doWatch(source,cb,{deep,immediate}) {
     } else {
         effect.run()
     }
-
+    const unwatch = ()=>effect.stop();
+    return unwatch;
 }

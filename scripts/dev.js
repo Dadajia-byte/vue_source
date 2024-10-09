@@ -18,7 +18,7 @@ const require = createRequire(import.meta.url);
 // console.log(__dirname,__filename,require);
 
 
-const target = args._[0] || "reactivity"; // 默认打包reactivity
+const target = args._[0] || "runtime-dom"; // 默认打包reactivity
 const format = args.f || "esm"; // 打包后的模块规范
 // console.log(target, format);
 
