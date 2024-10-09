@@ -9,11 +9,11 @@ export default function patchEvent(el, name, nextValue) {
     const eventName = name.slice(2).toLowerCase()
     const existingInvoker = invokers[name]; // 是否存在同名的事件绑定
 
-    if(nextValue && existingInvoker) { // 以前现在都有
+    if(nextValue && existingInvoker) { // 同名事件值替换
         const invoker = (invokers[name] = createInvoker(nextValue));
         return el.addEventListener(eventName, invoker)
     } 
-    if(existingInvoker) { // 现在没有以前有
+    if(existingInvoker) { // 移除旧事件（没有在新事件中）
         el.removeEventListener(name,existingInvoker);
         invokers[name] = undefined;
     }

@@ -1,4 +1,4 @@
-export default patchStyle = (el,preValue,nextValue)=>{
+export default function patchStyle(el,preValue,nextValue) {
     let style = el.style;
     for(let key in nextValue) {
         style[key] = nextValue[key]; // 新样式要全部生效
