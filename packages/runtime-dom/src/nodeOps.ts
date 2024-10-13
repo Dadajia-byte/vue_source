@@ -23,7 +23,10 @@ export const nodeOps = {
   },
   // 删除节点
   remove(child) {
+    console.log(child);
+    
     const parent = child.parentNode
+    
     if (parent) { // 根节点无法移除
       parent.removeChild(child)
     }

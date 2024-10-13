@@ -6,9 +6,12 @@ export default function patchStyle(el,preValue,nextValue) {
     if(preValue && Object.keys(preValue).length) {
         // 看以前的属性有没有，如果现在没有就删掉
         for(let key in preValue) {
-            if(!nextValue[key]) {
-                style[key] = null;
+            if(nextValue) {
+                if(nextValue[key]===null) {
+                    style[key] = null;
+                }
             }
         }
     }
 }
+

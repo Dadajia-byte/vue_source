@@ -6,3 +6,4 @@ export default function patchClass(el, value) {
     }
     
 }
+

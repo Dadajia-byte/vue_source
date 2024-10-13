@@ -1,4 +1,5 @@
 import { ShapeFlags } from "@vue/shared";
+import { isSameVnode } from "./createVnode";
 export function createRenderer(renderOptions) {
     const {
         insert:hostInsert,
@@ -17,9 +18,11 @@ export function createRenderer(renderOptions) {
             patch(null,children[i],container);
         }
     }
-    const mountElement =(vnode,container)=>{
+    const mountElement =(vnode,container,anchor)=>{
         const {type,children,props,shapeFlag} = vnode;
-        let el = hostCreateElement(type);
+        // 第一次渲染的时候让虚拟节点和真实dom创建关联
+        // 第二次渲染新的vnode，可以和上一次的vnode作对比，之后更新对应的el元素
+        let el = (vnode.el= hostCreateElement(type));
         if(props) { // 将属性挂载到真实dom上
             for(let key in props) {
                 hostPatchProp(el,key,null,props[key])
@@ -34,19 +37,195 @@ export function createRenderer(renderOptions) {
         }
         hostInsert(el,container);
     }
+    const processElement = (n1,n2,container,anchor)=>{
+        if(n1===null) {
+            mountElement(n2,container,anchor)
+        } else {
+            patchElement(n1,n2,container);// 非初始化，且复用节点更新
+        }
+    }
+    const patchProps = (oldProps,newProps,el) => {
+        // 新的要全部生效
+        for(let key in newProps) {
+            hostPatchProp(el,key,oldProps[key],newProps[key])
+        }
+        for(let key in oldProps) {
+            if(!(key in newProps)) { // 以前有现在没有需要删除
+                hostPatchProp(el,key,oldProps[key],null)
+            }
+        }
+    }
+    const unmountChildren = (children)=>{
+        for(let i=0;i<children.length;i++) {
+            let child = children[i];
+            unmount(child);
+        }
+    }
+    const patchKeyedChildren = (c1,c2,el)=>{ 
+        // 比较两个儿子的差异更新
+        // 1. 减少比对范围，先从头开始比，再从尾部开始比 确定不一样的范围
+        // 2. 从头比对，再从尾比对，如果有多余的部分
+        let i= 0;// 开始比对的索引
+        let e1 = c1.length-1;// 第一数组的尾部索引
+        let e2 = c2.length-1;// 第二数组的尾部索引
+        while(i<=e1&&i<=e2) { // 从头开始比
+            // 有任何一方循环结束了，就要终止比较
+            const n1 = c1[i];
+            const n2 = c2[i];
+            if(isSameVnode(n1,n2)) { // 如果当前节点相同
+                patch(n1,n2,el); // 更新当前节点的属性和儿子 递归比较子节点
+            } else {
+                break;
+            }
+            i++;
+        }
+        while(i<=e1 && i<=e2) { // 从尾部开始比
+            const n1 = c1[e1];
+            const n2 = c2[e2];
+            if(isSameVnode(n1,n2)) {
+                patch(n1,n2,el);
+            } else {
+                break;
+            }
+            e1--;
+            e2--;
+        }
+        // 处理增加和删除的特殊情况         
+        // a b
+        // a b c -> i=2,e1=1,e2=2 i>e1 && i<=e2
+        // a b
+        // c a b -> i=0,e1=-1,e2=0 i>e1 && i<=e2 新的多老的少
+        if(i>e1) { // 新的多
+            if(i<=e2) { // 有插入的部分
+                let nextPos =e2+1;// 当前下一个元素是否存在
+                let anchor = c2[nextPos]?.el;
+                while(i<=e2) { // 增加 e1 - e2 之间的所有
+                    patch(null,c2[i],el,anchor);
+                    i++;
+                }
+            }
+        } else if(i>e2) { // 老的多
+            if(i<=e1) {
+                while(i<=e1) { // 删除 e2 - e1 之间所有的
+                    unmount(c1[i]);
+                    i++;
+                }
+            }
+        } else { // 以上确认不变化的节点，并且对插入和删除进行了处理
+            // 最终比对乱序的情况
+            let s1 = i
+            let s2 = i
+            const keyToNewIndexMap = new Map();   // 做一个映射表，用于快速查找，看老的是否再新的里面，没有就删除，有的就更新
+            for(let i=s2;i<=e2;i++) {
+                const vnode = c2[i];
+                keyToNewIndexMap.set(vnode.key,i);
+            }
+            for(let i=s1;i<=s1;i++) {
+                const vnode = c1[i];
+                let newIndex = keyToNewIndexMap.get(vnode.key); // 通过key找索引
+                if(newIndex===undefined) { // 新的里面找不到老的索引，删除
+                    unmount(vnode);
+                } else { // 找到了
+                    patch(vnode,c2[newIndex],el);
+                }
+            }
+            // 调整顺序
+            // 我们可以按照新的队列 倒序插入 往参照物前插入
+            let toBePatched = e2 - s2 +1; // 倒序插入的个数
+            for(let i=toBePatched;i>0;i--) {
+                let newIndex = s2+i; // 对应的索引，找他下一个元素作为参照物，进行插入
+                let anchor = c2[newIndex+1]?.el;
+                const vnode = c2[newIndex];
+                if(!c2[newIndex].el) { // 说明是新增的元素
+                    patch(null,vnode,el,anchor); // 创建插入
+                } else {
+                    hostInsert(vnode,el,anchor); // 接着倒序插入
+                }
+            }
+        }
+    }
+    const patchChildren = (n1,n2,el)=>{ // 比较子节点的props进行更新
+        // 子节点类型 text null array
+        const c1 = n1.children;
+        const c2 = n2.children;
+        const prevShapeFlag = n1.shapeFlag;
+        const shapeFlag = n2.shapeFlag;
+        /* 比较情况
+            | 新儿子 | 旧儿子 | 操作方式|
+            | 文本 | 数组 | 删除老儿子，设置文本内容|
+            | 文本 | 文本 | 更新文本即可|
+            | 文本 | 空 | 更新文本即可|
+            | 数组 | 数组 | diff算法|
+            | 数组 | 文本 | 清空文本，进行挂载|
+            | 数组 | 空 | 进行挂载|
+            | 空 | 数组 | 删除所有儿子|
+            | 空 | 文本 | 清空文本|
+            | 空 | 空 | 无需处理|
+        */
+       // 删除相同处理，可总结为以下：
+       /*
+       1. 新文本，老数组；移除老的
+       2. 新文本，老文本；内容不相同替换
+       3. 老数组，新数组；全量diff
+       4. 老数组，新非数组；移除老节点
+       5. 老文本，新为null；
+       6. 老文本，新数组；
+       */
+       if(shapeFlag & ShapeFlags.TEXT_CHILDREN) { // 新文本
+        if(prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 新文本，老数组；移除老的
+            unmountChildren(c1)
+        }
+        if(c1!==c2) { // 新文本，老文本；内容不相同替换
+            hostSetElementText(el,c2)
+        }
+       } else { // 新非文本
+        if(prevShapeFlag&ShapeFlags.ARRAY_CHILDREN) { 
+            if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { //  老数组，新数组
+                // 全量diff算法 两个数组比较
+                patchKeyedChildren(c1,c2,el) 
+            } else { // 老数组，新非数组；移除老节点
+                unmountChildren(c1);
+            }
+        } else { 
+            if(prevShapeFlag&ShapeFlags.TEXT_CHILDREN) { // 老文本，新为null
+                hostSetElementText(el,'')
+            }
+            if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 老文本，新数组
+                mountChildren(c2,el)
+            }
+        }    
+       }
+    }
+    const patchElement = (n1,n2,container)=>{
+        // 1. 比较元素的差异，肯定需要复用dom元素
+        // 2. 比较属性和元素的子节点
+        let el = n2.el=n1.el; // 对dom元素的复用
+        let oldProps = n1.props || {};
+        let newProps = n2.props || {};
+        // hostPatchProp 只针对一个属性进行处理 class style event attr等
+        patchProps(newProps,oldProps,el); // 比完父级比子级，一级一级比较
+        patchChildren(n1,n2,el)
+    }
     // 渲染走这里，更新也走这里
-    const patch = (n1,n2,container)=>{
-
+    const patch = (n1,n2,container,anchor=null)=>{
         if(n1===n2) { // 如果两次渲染同一个节点则跳过
             return;
         }
-        if(n1===null) { // n1为null则说明是初始化
-            mountElement(n2,container)
+        if(n1 && !isSameVnode(n1,n2)) { // 判断两个节点是不是同一个
+            unmount(n1);
+            n1===null;//自动会走后面的逻辑了
         }
+        processElement(n1,n2,container,anchor); // 对元素处理，或初始化或复用节点
     }
+    const unmount =(vnode)=>hostRemove(vnode.el)
     // core中不关心如何渲染
     const render = (vnode,container) =>{
         // 将虚拟节点变成真实节点
+        if(vnode===null) { // 如果传入的虚拟节点是null，则需要删除上次挂载这个容器上的虚拟节点（还需要保证这个容器已经挂载过虚拟节点了）
+            if(container._vnode) {
+                unmount(container._vnode)
+            }
+        }
         // 这里渲染分为第一次渲染和后续渲染（更新），所以需要一个标识位用于保存上次更新的结果，然后再用patch进行更新    
         patch(container._vnode||null,vnode,container);// 如果有_vnode则进行比较再更新
         container._vnode = vnode; // 在挂载的容器上增添一个标识位，用于保存上一次的vnode
@@ -55,7 +234,6 @@ export function createRenderer(renderOptions) {
         render,
     }
 }
-
 // runtime-core完全不关心api层面，不关心如何渲染，只需要传入不同的渲染器就可以渲染不同的结果，同时他携带响应式系统等
 // 总而言之，core是一个可以跨平台的模块，它蕴含着任何平台共通的部分，你只需要传入对应的东西，他就能在不同平台使用
 // 而runtime-dom作为一个平台适配层，专门用于浏览器环境，它主要承担的责任是浏览器渲染过程（虚拟dom->真实dom）的操作，最后它会接入core实现构建

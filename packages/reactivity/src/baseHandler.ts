@@ -1,6 +1,6 @@
 import { isObject } from "@vue/shared";
 import { track,trigger } from "./reactEffect";
-import { reactive } from "vue";
+import { reactive } from "./reactive";
 import {ReactiveFlags} from './constants'
 
 export const mutableHandlers:ProxyHandler<any> = {
@@ -9,7 +9,6 @@ export const mutableHandlers:ProxyHandler<any> = {
             return true;
         }
         // 当取值的时候，应该让响应式属性 和 effect 映射起来
-        
         // 依赖收集 todo...
         track(target,key) // 收集这个对象上的属性，和effect关联到一起
         // return target[key] 这样写有问题，如果是个函数里面有调用this，这时this指向的普通对象而不是代理后的对象，此时里面的this.属性不会触发get

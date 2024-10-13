@@ -35,8 +35,6 @@ function traverse(source,depth,currentDepth=0,seen=new Set()) {
     }
     return source; // 在遍历的过程中就会触发每个属性的getter
 }
-
-
 function doWatch(source,cb,{deep,immediate}) {
     const reactiveGetter=(source)=>traverse(source,deep===false?1:undefined)
     
@@ -54,7 +52,6 @@ function doWatch(source,cb,{deep,immediate}) {
     }
 
     let oldValue;
-
     let clean;
     const onCleanup = (fn) =>{ // 清理副作用函数，常用于解决竞态问题
         clean =()=>{ 
@@ -76,7 +73,6 @@ function doWatch(source,cb,{deep,immediate}) {
         }
 
     }
-
     const effect = new ReactiveEffect(getter,job);
     if(cb) {
         if(immediate) { // 立即执行scheduler

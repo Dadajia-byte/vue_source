@@ -1,5 +1,5 @@
 import { isObject } from "@vue/shared";
-import { createVnode } from "./createVnode";
+import { createVnode,isVnode } from "./createVnode";
 /*
     h函数的参数有很多种：
     1. 1个 类型
@@ -38,6 +38,4 @@ export function h(type,propsOrChildren?,children?) {
         return createVnode(type,propsOrChildren,children);
     }
 }
-export function isVnode(value) {
-    return value?.__v_isVnode;
-}
+
