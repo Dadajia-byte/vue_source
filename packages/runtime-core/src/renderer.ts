@@ -1,5 +1,5 @@
 import { ShapeFlags } from "@vue/shared";
-import { isSameVnode, Text } from "./createVnode";
+import { Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
 export function createRenderer(renderOptions) {
     const {
@@ -54,6 +54,13 @@ export function createRenderer(renderOptions) {
             if(n1.children !==n2.children) {
                 hostSetText(n2.children)
             }
+        }
+    }
+    const processFragment = (n1,n2,container)=>{
+        if(n1===null) {
+            mountChildren(n2.children,container);
+        } else {
+            patchChildren(n1,n2,container);
         }
     }
     const patchProps = (oldProps,newProps,el) => {
@@ -244,13 +251,22 @@ export function createRenderer(renderOptions) {
         const {type} = n2;
         switch(type) {
             case Text:
-                processText(n1,n2);
+                processText(n1,n2,container);
+                break;
+            case Fragment:
+                processFragment(n1,n2,container);
                 break;
             default:
                 processElement(n1,n2,container,anchor);// 对元素处理，或初始化或复用节点
         }
     }
-    const unmount =(vnode)=>hostRemove(vnode.el)
+    const unmount =(vnode)=>{
+        if(vnode.type===Fragment) {
+            unmountChildren(vnode.children);
+            return;
+        }
+        hostRemove(vnode.el)
+    }
     // core中不关心如何渲染
     const render = (vnode,container) =>{
         // 将虚拟节点变成真实节点
