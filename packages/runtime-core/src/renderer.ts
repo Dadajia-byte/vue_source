@@ -1,5 +1,6 @@
 import { ShapeFlags } from "@vue/shared";
-import { isSameVnode } from "./createVnode";
+import { isSameVnode, Text } from "./createVnode";
+import { getSequence } from "./seq";
 export function createRenderer(renderOptions) {
     const {
         insert:hostInsert,
@@ -44,6 +45,17 @@ export function createRenderer(renderOptions) {
             patchElement(n1,n2,container);// 非初始化，且复用节点更新
         }
     }
+    const processText = (n1,n2,container) =>{
+        if(n1===null) {
+            // 1. 虚拟节点要关联真实dom
+            // 2，将节点插入到页面中
+            hostInsert(n2.el=hostCreateText(n2.children,container));
+        } else {
+            if(n1.children !==n2.children) {
+                hostSetText(n2.children)
+            }
+        }
+    }
     const patchProps = (oldProps,newProps,el) => {
         // 新的要全部生效
         for(let key in newProps) {
@@ -61,6 +73,7 @@ export function createRenderer(renderOptions) {
             unmount(child);
         }
     }
+    // vue3中 分为两种diff，一种是下面的全量diff(递归)，一种是快速diff(靶向更新)->基于模板跟新
     const patchKeyedChildren = (c1,c2,el)=>{ 
         // 比较两个儿子的差异更新
         // 1. 减少比对范围，先从头开始比，再从尾部开始比 确定不一样的范围
@@ -116,6 +129,10 @@ export function createRenderer(renderOptions) {
             let s1 = i
             let s2 = i
             const keyToNewIndexMap = new Map();   // 做一个映射表，用于快速查找，看老的是否再新的里面，没有就删除，有的就更新
+            let toBePatched = e2 - s2 +1; // 倒序插入的个数  
+            let newIndexToOldMapIndex = new Array(toBePatched).fill(0); // 填充
+            
+            // 根据新的节点找到老节点
             for(let i=s2;i<=e2;i++) {
                 const vnode = c2[i];
                 keyToNewIndexMap.set(vnode.key,i);
@@ -126,12 +143,16 @@ export function createRenderer(renderOptions) {
                 if(newIndex===undefined) { // 新的里面找不到老的索引，删除
                     unmount(vnode);
                 } else { // 找到了
+                    // i可能是0，为了保证0是没有比对过的元素，我们+1
+                    newIndexToOldMapIndex[newIndex-s2] = i+1; // 给新节点中曾是老节点同一类型的进行标记，记录下它老的索引值
                     patch(vnode,c2[newIndex],el);
                 }
             }
             // 调整顺序
             // 我们可以按照新的队列 倒序插入 往参照物前插入
-            let toBePatched = e2 - s2 +1; // 倒序插入的个数
+            
+            let increasingSeq = getSequence(newIndexToOldMapIndex);
+            let j = increasingSeq.length;// 索引
             for(let i=toBePatched;i>0;i--) {
                 let newIndex = s2+i; // 对应的索引，找他下一个元素作为参照物，进行插入
                 let anchor = c2[newIndex+1]?.el;
@@ -139,7 +160,12 @@ export function createRenderer(renderOptions) {
                 if(!c2[newIndex].el) { // 说明是新增的元素
                     patch(null,vnode,el,anchor); // 创建插入
                 } else {
-                    hostInsert(vnode,el,anchor); // 接着倒序插入
+                    if(i===increasingSeq[j]) {
+                        j--; // 做了diff算法的优化
+                    } else {
+                        hostInsert(vnode,el,anchor); // 接着倒序插入
+                    }
+                    
                 }
             }
         }
@@ -196,7 +222,7 @@ export function createRenderer(renderOptions) {
         }    
        }
     }
-    const patchElement = (n1,n2,container)=>{
+    const patchElement = (n1,n2)=>{
         // 1. 比较元素的差异，肯定需要复用dom元素
         // 2. 比较属性和元素的子节点
         let el = n2.el=n1.el; // 对dom元素的复用
@@ -215,7 +241,14 @@ export function createRenderer(renderOptions) {
             unmount(n1);
             n1===null;//自动会走后面的逻辑了
         }
-        processElement(n1,n2,container,anchor); // 对元素处理，或初始化或复用节点
+        const {type} = n2;
+        switch(type) {
+            case Text:
+                processText(n1,n2);
+                break;
+            default:
+                processElement(n1,n2,container,anchor);// 对元素处理，或初始化或复用节点
+        }
     }
     const unmount =(vnode)=>hostRemove(vnode.el)
     // core中不关心如何渲染
@@ -225,10 +258,12 @@ export function createRenderer(renderOptions) {
             if(container._vnode) {
                 unmount(container._vnode)
             }
+        } else {
+            // 这里渲染分为第一次渲染和后续渲染（更新），所以需要一个标识位用于保存上次更新的结果，然后再用patch进行更新    
+            patch(container._vnode||null,vnode,container);// 如果有_vnode则进行比较再更新
+            container._vnode = vnode; // 在挂载的容器上增添一个标识位，用于保存上一次的vnode
         }
-        // 这里渲染分为第一次渲染和后续渲染（更新），所以需要一个标识位用于保存上次更新的结果，然后再用patch进行更新    
-        patch(container._vnode||null,vnode,container);// 如果有_vnode则进行比较再更新
-        container._vnode = vnode; // 在挂载的容器上增添一个标识位，用于保存上一次的vnode
+        
     }
     return {
         render,

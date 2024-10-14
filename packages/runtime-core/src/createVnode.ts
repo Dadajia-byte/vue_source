@@ -2,6 +2,7 @@ import {  isString, ShapeFlags } from "@vue/shared";
 
 // 标准的虚拟dom创建方法，h方法其实是基于createVnode重写的，就是因为重写才导致h方法的写法多种多样，但终归是调用createVnode，它的调用就是h方法的标准写法
 // 虽然标准但是这里的children仍可能是文本，vn数组（就算只有一个vn也必须变成数组），所以需要做判断
+export const Text = Symbol('Text');
 export function isVnode(value) {
     return value?.__v_isVnode;
 }
