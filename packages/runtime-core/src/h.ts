@@ -1,6 +1,14 @@
 import { isObject } from "@vue/shared";
 import { createVnode,isVnode } from "./createVnode";
-/*
+
+/**
+ * 
+ * @param type 同createVnode一致，字符串或者Symbol
+ * @param propsOrChildren 可选，可能是props或者children；
+ * @param children 可选 若存在一定是children
+ * @returns 
+ * @description 重写createVnode，让参数更多样性
+ * 
     h函数的参数有很多种：
     1. 1个 类型
     2. 2个 类型+props/childrens
@@ -14,8 +22,8 @@ import { createVnode,isVnode } from "./createVnode";
     4. 直接传递非对象 -> 文本
     5. 不能出现三个参数时，第二个参数不是属性
     6. 如果出现三个参数，后面都是儿子
+ 
  */
-// 重写createVnode，让参数更多样性
 export function h(type,propsOrChildren?,children?) {
     let l = arguments.length;// 参数长度
     if(l === 2) {
