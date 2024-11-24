@@ -1,6 +1,12 @@
 import { ShapeFlags } from "@vue/shared";
 import { Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
+/**
+ * 
+ * @param renderOptions 
+ * @returns 
+ * @description 创建渲染器，渲染器是一个对象，包含一个render方法，用于渲染虚拟节点
+ */
 import {reactive, ReactiveEffect} from "@vue/reactivity";
 export function createRenderer(renderOptions) {
     const {
@@ -13,35 +19,60 @@ export function createRenderer(renderOptions) {
         parentNode:hostParentNode,
         nextSibling:hostNextSibling,
         patchProp:hostPatchProp,
-    } = renderOptions; // 解构渲染DomApi
+    } = renderOptions; // 解构渲染DomAPI
+    /**
+     * 用于挂载子元素
+     * @param children 虚拟节点的childrens
+     * @param container 虚拟节点挂载的容器，这里也可见虚拟节点的container都是它的顶层（我一开始还以为是父节点哪里刚create的呢）
+     */
     const mountChildren =(children,container)=>{
-        for(let i=0;i<children.length;i++) {
+        for(let i=0;i<children.length;i++) { // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
             // children[i]可能是纯文本元素
-            patch(null,children[i],container);
+            patch(null,children[i],container); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
         }
     }
+    /**
+     * 挂载操作，子元素也全都是挂载初始化.
+     * 由于传入processElement的n1为空或者n1和n2不是同一个节点，所以这里需要挂载新的节点，即初始化操作
+     * @param vnode n2即本次需要处理的虚拟节点
+     * @param container 本次被挂载的容器
+     * @param anchor 锚点，在全量diff中目前似乎没有用处
+     */
     const mountElement =(vnode,container,anchor)=>{
-        const {type,children,props,shapeFlag} = vnode;
+        const {type,children,props,shapeFlag} = vnode; // 解构虚拟节点，并依次处理对应的属性
         // 第一次渲染的时候让虚拟节点和真实dom创建关联
         // 第二次渲染新的vnode，可以和上一次的vnode作对比，之后更新对应的el元素
+
+        // ---创建真实dom---
         let el = (vnode.el= hostCreateElement(type));
+
+        // ---处理属性(props)---
         if(props) { // 将属性挂载到真实dom上
             for(let key in props) {
                 hostPatchProp(el,key,null,props[key])
             }
         }
+
+        // --处理子元素(childrens)--
         // 将vnode身上的shapeFlags和实际的文本节点的shapeFlages进行与运算，如果大于0，则儿子元素肯定是文本节点
         // 原因是位运算的特点，如果做与运算结果大于0，说明A包含B或者B包含A，而shapeFlags本身就是或运算出来的
         if(shapeFlag & ShapeFlags.TEXT_CHILDREN) { // 子元素是文本节点
-            hostSetElementText(el,children)
-        } else if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 子元素是数组
-            mountChildren(el,container);
+            hostSetElementText(el,children) // 设置文本，你可以简单理解为给el这个dom的innnerText赋值
+        } else if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 子元素是数组，既然子元素是数组（虚拟节点数组），当然要继续处理下去喽，当然使用patch就行了，但是这里单独多拉出来一个方法，是为了更好的逻辑分离
+            mountChildren(el,container); // 递归挂载子元素
         }
         hostInsert(el,container);
     }
+    /**
+     * 针对普通元素进行更新或初始化
+     * @param n1 容器上挂载的vnode，用于判断是否是初始化（如果null则代表初始化）
+     * @param n2 本次需要挂载或者更新的虚拟节点
+     * @param container 本次被挂载的容器
+     * @param anchor 锚点，用于diff算法插入的位置
+     */
     const processElement = (n1,n2,container,anchor)=>{
-        if(n1===null) {
-            mountElement(n2,container,anchor)
+        if(n1===null) { // 初始化(或者n1和n2不是一个节点强制初始化)
+            mountElement(n2,container,anchor) // 挂载元素
         } else {
             patchElement(n1,n2,container);// 非初始化，且复用节点更新
         }
@@ -64,13 +95,20 @@ export function createRenderer(renderOptions) {
             patchChildren(n1,n2,container);
         }
     }
+    /**
+     * 
+     * @param oldProps n1的props即老属性
+     * @param newProps n2的props即新属性
+     * @param el 传入的dom，即n1.el和n2.el，它俩被链接了其实是一个
+     */
     const patchProps = (oldProps,newProps,el) => {
         // 新的要全部生效
         for(let key in newProps) {
             hostPatchProp(el,key,oldProps[key],newProps[key])
         }
+        // 老的有新的没有，需要删除
         for(let key in oldProps) {
-            if(!(key in newProps)) { // 以前有现在没有需要删除
+            if(!(key in newProps)) {
                 hostPatchProp(el,key,oldProps[key],null)
             }
         }
@@ -81,7 +119,14 @@ export function createRenderer(renderOptions) {
             unmount(child);
         }
     }
-    // vue3中 分为两种diff，一种是下面的全量diff(递归)，一种是快速diff(靶向更新)->基于模板跟新
+    
+    /**
+     * 全量diff更新，仅限两个儿子都是数组的情况
+     * @param c1 
+     * @param c2 
+     * @param el 
+     * @description vue3中 分为两种diff，一种是下面的全量diff(递归)，一种是快速diff(靶向更新)->基于模板跟新
+     */
     const patchKeyedChildren = (c1,c2,el)=>{ 
         // 比较两个儿子的差异更新
         // 1. 减少比对范围，先从头开始比，再从尾部开始比 确定不一样的范围
@@ -178,6 +223,12 @@ export function createRenderer(renderOptions) {
             }
         }
     }
+    /**
+     * 子节点比较更新
+     * @param n1 老虚拟节点
+     * @param n2 新虚拟节点
+     * @param el dom
+     */
     const patchChildren = (n1,n2,el)=>{ // 比较子节点的props进行更新
         // 子节点类型 text null array
         const c1 = n1.children;
@@ -230,14 +281,24 @@ export function createRenderer(renderOptions) {
         }    
        }
     }
+    /**
+     * 更新操作，diff算法就是在这里处理的，必须满足n1不为null(非初始化挂载且n1和n2是一个节点（type和key相同）)
+     * @param n1 上一次挂载的虚拟节点
+     * @param n2 此次挂载的虚拟节点
+     * @description 依次对 dom、props、children 进行比较更新。
+     */
     const patchElement = (n1,n2)=>{
         // 1. 比较元素的差异，肯定需要复用dom元素
         // 2. 比较属性和元素的子节点
-        let el = n2.el=n1.el; // 对dom元素的复用
+        let el =n2.el=n1.el; // 对dom元素的复用，创建引用连接，确保el修改后会对n2，n1产生影响
         let oldProps = n1.props || {};
         let newProps = n2.props || {};
+
+        // --- props比较 ---
         // hostPatchProp 只针对一个属性进行处理 class style event attr等
         patchProps(newProps,oldProps,el); // 比完父级比子级，一级一级比较
+
+        // --- children比较 ---
         patchChildren(n1,n2,el)
     }
     const mountComponent = (n1,n2,container,anchor)=>{
@@ -262,21 +323,29 @@ export function createRenderer(renderOptions) {
         }
     }
 
-    // 渲染走这里，更新也走这里
+    /**
+     * 渲染走这里，更新也走这里
+     * @param n1 容器上（container）的_vnode，即上次渲染中_vnode，这个值可能为null，代表是初次渲染
+     * @param n2 本次传入的vnode，如果是初次渲染则正常渲染，如果n1有值，那么n2将会和n1进行diff比较更新
+     * @param container 挂载的容器
+     * @param anchor 锚点默认为null
+     * @returns 
+     */
     const patch = (n1,n2,container,anchor=null)=>{
         if(n1===n2) { // 如果两次渲染同一个节点则跳过
             return;
         }
         if(n1 && !isSameVnode(n1,n2)) { // 判断两个节点是不是同一个
-            unmount(n1);
-            n1===null;//自动会走后面的逻辑了
+            // 如果是更新操作（n1!==null），且两个节点不一样，则直接进行全量替换（不进行diff）
+            unmount(n1); // 卸载n1
+            n1===null;//自动会走后面的逻辑了，变成初次渲染了
         }
-        const {type, shapeFlag} = n2;
+        const {type, shapeFlag} = n2; // 获取节点类型，针对不同类型进行不同处理
         switch(type) {
-            case Text:
+            case Text: // Text节点
                 processText(n1,n2,container); // 处理文本
                 break;
-            case Fragment:
+            case Fragment: // Fragment节点
                 processFragment(n1,n2,container); // 处理Fragment
                 break;
             default:
@@ -288,6 +357,11 @@ export function createRenderer(renderOptions) {
                 }
         }
     }
+    /**
+     * 用于卸载挂在真实dom上的节点
+     * @param vnode 传入的虚拟节点，它是来自它挂载的容器（container）身上的_vnode属性
+     * @returns 
+     */
     const unmount =(vnode)=>{
         if(vnode.type===Fragment) {
             console.log(vnode,vnode);
@@ -297,6 +371,11 @@ export function createRenderer(renderOptions) {
         }
     }
     // core中不关心如何渲染
+    /**
+     * 生成的渲染器
+     * @param vnode 传入的虚拟节点
+     * @param container 传入的容器（虚拟节点需要挂在的真实dom），他身上在经历render之后会有一个_vnode属性，用于保存上一次的vnode，同时也用于标识这个dom曾经被挂载过虚拟节点
+     */
     const render = (vnode,container) =>{
         // 将虚拟节点变成真实节点
         if(vnode===null) { // 如果传入的虚拟节点是null，则需要删除上次挂载这个容器上的虚拟节点（还需要保证这个容器已经挂载过虚拟节点了）
