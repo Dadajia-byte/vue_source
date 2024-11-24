@@ -9,10 +9,9 @@
     2 3 7 先暂且认为这个序列够长
     2 3 6
     2 3 6 8
-    2 3 4 8 记录 4替换了8 且8之前的是6
+    2 3 4 8 记录 4替换了6 且8之前的是6
     2 3 4 8 9
-    2 3 4 8 9 11
-    
+    2 3 4 8 9 11 
 */
 
 // 实现最长递增子序列
@@ -29,7 +28,7 @@ export const getSequence=(arr)=>{
     let start;
     let end;
     let mid;
-    const len = result.length; // 数组长度
+    const len = arr.length; // 数组长度
     for(let i=0;i<len;i++) {
         const arrI = arr[i];
         if(arrI!==0) { // 在vue3中认为0应该是从未出现过的，需要创建的节点

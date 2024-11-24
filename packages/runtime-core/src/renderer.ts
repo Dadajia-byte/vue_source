@@ -1,6 +1,7 @@
 import { ShapeFlags } from "@vue/shared";
 import { Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
+import {reactive, ReactiveEffect} from "@vue/reactivity";
 export function createRenderer(renderOptions) {
     const {
         insert:hostInsert,
@@ -239,6 +240,28 @@ export function createRenderer(renderOptions) {
         patchProps(newProps,oldProps,el); // 比完父级比子级，一级一级比较
         patchChildren(n1,n2,el)
     }
+    const mountComponent = (n1,n2,container,anchor)=>{
+        // 组件可以基于自己的状态重新渲染，即effect
+        const {
+            data = ()=>{},
+            render
+        } = n2.type;
+        const state = reactive(data()); // 组件的状态
+        const componentUpdate = ()=>{}
+
+        const effect=new ReactiveEffect(componentUpdate,()=>update())
+        const update = ()=>{
+            effect.run()
+        }
+    }
+    const processComponent = (n1,n2,container,anchor)=>{
+        if(n1===null) {
+            mountComponent(n1,n2,container,anchor);
+        } else {
+            patchComponent(n1,n2,container);
+        }
+    }
+
     // 渲染走这里，更新也走这里
     const patch = (n1,n2,container,anchor=null)=>{
         if(n1===n2) { // 如果两次渲染同一个节点则跳过
@@ -248,24 +271,30 @@ export function createRenderer(renderOptions) {
             unmount(n1);
             n1===null;//自动会走后面的逻辑了
         }
-        const {type} = n2;
+        const {type, shapeFlag} = n2;
         switch(type) {
             case Text:
-                processText(n1,n2,container);
+                processText(n1,n2,container); // 处理文本
                 break;
             case Fragment:
-                processFragment(n1,n2,container);
+                processFragment(n1,n2,container); // 处理Fragment
                 break;
             default:
-                processElement(n1,n2,container,anchor);// 对元素处理，或初始化或复用节点
+                if (shapeFlag & ShapeFlags.ELEMENT) { // 对元素处理，或初始化或复用节点
+                 processElement(n1,n2,container,anchor);
+                } else if (shapeFlag & ShapeFlags.COMPONENT) { // 组件的处理
+                    // 对组件的处理，需要注意的是vue3中的函数式组件已经弃用了，因为不节约性能
+                    processComponent(n1,n2,container,anchor);
+                }
         }
     }
     const unmount =(vnode)=>{
         if(vnode.type===Fragment) {
+            console.log(vnode,vnode);
             unmountChildren(vnode.children);
-            return;
+        } else {
+            hostRemove(vnode.el);
         }
-        hostRemove(vnode.el)
     }
     // core中不关心如何渲染
     const render = (vnode,container) =>{
@@ -279,7 +308,6 @@ export function createRenderer(renderOptions) {
             patch(container._vnode||null,vnode,container);// 如果有_vnode则进行比较再更新
             container._vnode = vnode; // 在挂载的容器上增添一个标识位，用于保存上一次的vnode
         }
-        
     }
     return {
         render,
