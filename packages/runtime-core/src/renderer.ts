@@ -8,6 +8,7 @@ import { getSequence } from "./seq";
  * @description 创建渲染器，渲染器是一个对象，包含一个render方法，用于渲染虚拟节点
  */
 import {reactive, ReactiveEffect} from "@vue/reactivity";
+import { queueJob } from "./sheduler";
 export function createRenderer(renderOptions) {
     const {
         insert:hostInsert,
@@ -264,7 +265,7 @@ export function createRenderer(renderOptions) {
             hostSetElementText(el,c2)
         }
        } else { // 新非文本
-        if(prevShapeFlag&ShapeFlags.ARRAY_CHILDREN) { 
+        if(prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) { 
             if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { //  老数组，新数组
                 // 全量diff算法 两个数组比较
                 patchKeyedChildren(c1,c2,el) 
@@ -301,23 +302,46 @@ export function createRenderer(renderOptions) {
         // --- children比较 ---
         patchChildren(n1,n2,el)
     }
-    const mountComponent = (n1,n2,container,anchor)=>{
+    const mountComponent = (n2,container,anchor)=>{
+        // 这里需要知道为什么里面有更新diff操作，明明是mount呀?原来之前的更新主动修改发生的更新，这里的更新是指响应式自动更新，因为在组件初次挂载时，就必须写好的更新函数，所以才会有更新操作
         // 组件可以基于自己的状态重新渲染，即effect
         const {
-            data = ()=>{},
+            data=()=>{},
             render
-        } = n2.type;
+        } = n2.type; // 如果是组件的话
         const state = reactive(data()); // 组件的状态
-        const componentUpdate = ()=>{}
-
-        const effect=new ReactiveEffect(componentUpdate,()=>update())
-        const update = ()=>{
-            effect.run()
+        const instance = {
+            state, // 状态
+            vnode:n2, // 组件的虚拟节点
+            subTree:null, // 子树
+            isMounted:false, // 是否挂载完成
+            update:null // 组件的更新函数
         }
+        const componentUpdate = ()=>{
+            // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
+            if (!instance.isMounted) {
+                const subTree = render.call(state,state); // 内部使用了this
+                patch(null,subTree,container,anchor);
+                instance.isMounted = true;
+                instance.subTree = subTree;
+            } else {
+                // 基于状态的组件更新
+                const subTree = render.call(state,state);
+                patch(instance.subTree,subTree,container,anchor); // 上一次的subTree和此次进行更新
+                instance.subTree = subTree;
+            }
+        }
+        // 这里不直接使用update作为scheduler，而是再包装实现批处理
+        // 如果不想做批处理直接使用watchEffect，那么每次更新都会执行scheduler，这样每次更新都会执行一次effect，导致每次更新都执行一次render，导致性能问题
+        const effect=new ReactiveEffect(componentUpdate,()=>
+            queueJob(update)
+        ); 
+        const update = (instance.update=()=>effect.run());
+        update();
     }
     const processComponent = (n1,n2,container,anchor)=>{
         if(n1===null) {
-            mountComponent(n1,n2,container,anchor);
+            mountComponent(n2,container,anchor);
         } else {
             patchComponent(n1,n2,container);
         }
@@ -351,7 +375,7 @@ export function createRenderer(renderOptions) {
             default:
                 if (shapeFlag & ShapeFlags.ELEMENT) { // 对元素处理，或初始化或复用节点
                  processElement(n1,n2,container,anchor);
-                } else if (shapeFlag & ShapeFlags.COMPONENT) { // 组件的处理
+                } else if (shapeFlag & ShapeFlags.COMPONENT) { // 组件的处理(包含了状态组件和函数组件)
                     // 对组件的处理，需要注意的是vue3中的函数式组件已经弃用了，因为不节约性能
                     processComponent(n1,n2,container,anchor);
                 }
@@ -364,7 +388,6 @@ export function createRenderer(renderOptions) {
      */
     const unmount =(vnode)=>{
         if(vnode.type===Fragment) {
-            console.log(vnode,vnode);
             unmountChildren(vnode.children);
         } else {
             hostRemove(vnode.el);

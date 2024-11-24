@@ -1,7 +1,7 @@
 export enum ShapeFlags { // 对元素形状的判断
     ELEMENT = 1, // 单纯的元素01
     FUNCTIONAL_COMPONENT = 1 << 1, // 函数式组件；右移一位变成0b10即2 10
-    STATEFUL_COMPONENT = 1 << 2, // 4 100
+    STATEFUL_COMPONENT = 1 << 2, // 4 100 // 状态组件
     TEXT_CHILDREN = 1 << 3, // 8 1000
     ARRAY_CHILDREN = 1 << 4, // 16 10000
     SLOTS_CHILDREN = 1 << 5, // 32
