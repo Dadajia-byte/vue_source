@@ -11,3 +11,7 @@ export function isString(value) {
 }
 
 export * from './shapeFlags'
+const hasOwnProperty = Object.prototype.hasOwnProperty; // 反柯里化放大方法
+export const hasOwn = (val,key) => hasOwnProperty.call(val,key)
+
+
