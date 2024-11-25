@@ -1,8 +1,8 @@
-import { hasOwn, ShapeFlags } from "@vue/shared";
+import {  ShapeFlags } from "@vue/shared";
 import { Fragment, isSameVnode, isVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
-/**
- * 
+import { createComponentInstance,setupComponent } from "./component";
+/** 
  * @param renderOptions 
  * @returns 
  * @description 创建渲染器，渲染器是一个对象，包含一个render方法，用于渲染虚拟节点
@@ -302,102 +302,9 @@ export function createRenderer(renderOptions) {
         // --- children比较 ---
         patchChildren(n1,n2,el)
     }
-    // 初始化属性
-    const initProps = (instance,rawProps)=>{
-        const props = {}
-        const attrs = {}
-        const propsOptions = instance.propsOptions || []; // 用户在组件中定义的
-        if(rawProps) {
-            for(let key in rawProps) { // 用所有的来分裂
-                const value = rawProps[key];
-                /* 这里缺一步校验 */
 
-               if(key in propsOptions) {
-                // props[key] = shallowReactive(value); 
-                props[key] = value; 
-               } else {
-                attrs[key] = value
-               }
-            }
-        }
-        instance.props = reactive(props); // props 不需要深度代理，因为组件内部是不能改外部传进来的属性的，但是我没写过shallowReactive
-        instance.$attrs = attrs; // 其实吧，虽说$attrs是非响应式的，到那时其实在开发环境下，它是响应式的（为了方便）
-    }
-    const mountComponent = (n2,container,anchor)=>{
-        // 这里需要知道为什么里面有更新diff操作，明明是mount呀?原来之前的更新主动修改发生的更新，这里的更新是指响应式自动更新，因为在组件初次挂载时，就必须写好的更新函数，所以才会有更新操作
-        // 组件可以基于自己的状态重新渲染，即effect
-        const {
-            data=()=>{},
-            render,
-            props:propsOptions ={}
-        } = n2.type; // 如果是组件的话
-        const state = reactive(data()); // 组件的状态
-
-        // 属性分为两种 $attrs(非响应式的) 和 props(响应式的)
-        // 所有属性 - propsOptions = $attrs
-        // 简单理解起来就是，外面传进来的属性，只要没有用defineProps定义成props或者组件内部自己写props，全都是$attrs
-        
-        const instance = {
-            state, // 状态
-            vnode:n2, // 组件的虚拟节点
-            subTree:null, // 子树
-            isMounted:false, // 是否挂载完成
-            update:null, // 组件的更新函数
-            props:{}, 
-            attrs:{},
-            propsOptions,
-            component:null,
-            proxy:null, // 用来代理props，attrs，data让用户方便的访问
-        }
-
-        // 根据propsOptions 来区分props和$attrs
-        n2.component = instance;
-        // 元素更新 n2.el = n1.el
-        // 组件更新 n2.component.subTree.el = n1.component.subTree.el
-        console.log(n2);
-        // 再初始化时，这里的props实际上就是外面传入的h函数的第二个参数，包括了props和$attrs
-        // 这个函数会把它在instance上分裂
-        initProps(instance,n2.props); 
-
-        const publicProperty = {
-            $attrs:instance.attrs,
-        }
-
-
-        // 实现完成后，组件里的this应该能访问到props，$attrs，组件自己写得data
-        instance.proxy = new Proxy(instance,{
-            get(target,key) {
-                const {state,props} = target;
-                // 先看状态再看props
-                // 源码好像是先props 再看状态
-                if(state && hasOwn(state,key)) {
-                    return state[key];
-                } else if(props && hasOwn(props,key)) { // props
-                    return props[key];
-                } 
-
-                // 对于一些无法修改的属性 $slots、$attrs
-                // 在外侧其实this.$attrs.要的属性 也是可以获取的，但不建议，外侧还是 proxy.$attrs.要的属性 好
-                const getter = publicProperty[key]; // 通过不同策略访问对应的方法
-                if(getter) {
-                    return getter(target);
-                }
-            },
-            set(target,key,value) {
-                const {state,props} = target;
-                // 先看状态再看props
-                if(state && hasOwn(state,key)) {
-                    state[key]=value;
-                } else if(props && hasOwn(props,key)) { // props
-                    // 我们用户可以修改属性的嵌套属性，这不合法！
-                    props[key] =value;
-                    console.warn('props是只读');
-                } 
-                return true;
-            }
-        })
-
-
+    function setupRenderEffect(instance,container,anchor) {
+        const {render} = instance;
         const componentUpdate = ()=>{
             // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
             if (!instance.isMounted) {
@@ -419,6 +326,17 @@ export function createRenderer(renderOptions) {
         ); 
         const update = (instance.update=()=>effect.run());
         update();
+    }
+    
+    const mountComponent = (n2,container,anchor)=>{
+        // 1. 先创建组件实例
+        const instance = (n2.component = createComponentInstance(n2));
+        
+        // 2. 给实例属性赋值
+        setupComponent(instance);
+
+        // 3. 创建一个effect
+        setupRenderEffect(instance,container,anchor);
     }
     const processComponent = (n1,n2,container,anchor)=>{
         if(n1===null) {
