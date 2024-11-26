@@ -16,3 +16,4 @@ packages/*/dist
 
 # 忽略idea
 .idea
+.vscode

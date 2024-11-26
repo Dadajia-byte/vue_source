@@ -1,5 +1,5 @@
 import {  ShapeFlags } from "@vue/shared";
-import { Fragment, isSameVnode, isVnode, Text } from "./createVnode";
+import { Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
 import { createComponentInstance,setupComponent } from "./component";
 /** 
@@ -7,7 +7,7 @@ import { createComponentInstance,setupComponent } from "./component";
  * @returns 
  * @description 创建渲染器，渲染器是一个对象，包含一个render方法，用于渲染虚拟节点
  */
-import {reactive, ReactiveEffect} from "@vue/reactivity";
+import {ReactiveEffect} from "@vue/reactivity";
 import { queueJob } from "./sheduler";
 export function createRenderer(renderOptions) {
     const {
@@ -27,8 +27,10 @@ export function createRenderer(renderOptions) {
      * @param container 虚拟节点挂载的容器，这里也可见虚拟节点的container都是它的顶层（我一开始还以为是父节点哪里刚create的呢）
      */
     const mountChildren =(children,container)=>{
+        console.log(children,111);
         for(let i=0;i<children.length;i++) { // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
             // children[i]可能是纯文本元素
+            console.log(children[i]);
             patch(null,children[i],container); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
         }
     }
@@ -60,7 +62,7 @@ export function createRenderer(renderOptions) {
         if(shapeFlag & ShapeFlags.TEXT_CHILDREN) { // 子元素是文本节点
             hostSetElementText(el,children) // 设置文本，你可以简单理解为给el这个dom的innnerText赋值
         } else if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 子元素是数组，既然子元素是数组（虚拟节点数组），当然要继续处理下去喽，当然使用patch就行了，但是这里单独多拉出来一个方法，是为了更好的逻辑分离
-            mountChildren(el,container); // 递归挂载子元素
+            mountChildren(children,el); // 递归挂载子元素
         }
         hostInsert(el,container);
     }
@@ -82,15 +84,16 @@ export function createRenderer(renderOptions) {
         if(n1===null) {
             // 1. 虚拟节点要关联真实dom
             // 2，将节点插入到页面中
-            hostInsert(n2.el=hostCreateText(n2.children,container));
+            hostInsert(n2.el=hostCreateText(n2.children),container);
         } else {
             if(n1.children !==n2.children) {
                 hostSetText(n2.children)
             }
         }
     }
+
     const processFragment = (n1,n2,container)=>{
-        if(n1===null) {
+        if(n1===null) {   
             mountChildren(n2.children,container);
         } else {
             patchChildren(n1,n2,container);
@@ -327,7 +330,15 @@ export function createRenderer(renderOptions) {
         const update = (instance.update=()=>effect.run());
         update();
     }
-    
+    /**
+     * 挂载组件，主要分为三个步骤
+     * 1. 创建组件实例
+     * 2. 给实例属性赋值
+     * 3. 创建一个effect
+     * @param n2 提供的组件vnode
+     * @param container 挂载的容器
+     * @param anchor 锚点
+     */
     const mountComponent = (n2,container,anchor)=>{
         // 1. 先创建组件实例
         const instance = (n2.component = createComponentInstance(n2));
@@ -338,6 +349,21 @@ export function createRenderer(renderOptions) {
         // 3. 创建一个effect
         setupRenderEffect(instance,container,anchor);
     }
+    /**
+     * 处理状态组件
+     * @param n1 上一次的节点
+     * @param n2 此次节点
+     * // 如果是状态组件的话，那么这里的n2不应该是跟正常标签一样的vnode，而是一个多包了一层的vnode
+     * n2 = {
+     *          type: {  // --> 一个内含render方法的对象VueComponent，就是书写的组件，实际上模板语法template会被编译成这样的对象
+     *              render() --> 返回vnode --> 即subTree
+     *          }, 
+     *          props:{},
+     *          xxx
+     *       } --> vnode
+     * @param container 挂载容器
+     * @param anchor 锚点
+     */
     const processComponent = (n1,n2,container,anchor)=>{
         if(n1===null) {
             mountComponent(n2,container,anchor);
@@ -361,7 +387,7 @@ export function createRenderer(renderOptions) {
         if(n1 && !isSameVnode(n1,n2)) { // 判断两个节点是不是同一个
             // 如果是更新操作（n1!==null），且两个节点不一样，则直接进行全量替换（不进行diff）
             unmount(n1); // 卸载n1
-            n1===null;//自动会走后面的逻辑了，变成初次渲染了
+            n1=null;//自动会走后面的逻辑了，变成初次渲染了
         }
         const {type, shapeFlag} = n2; // 获取节点类型，针对不同类型进行不同处理
         switch(type) {
@@ -406,7 +432,7 @@ export function createRenderer(renderOptions) {
             }
         } else {
             // 这里渲染分为第一次渲染和后续渲染（更新），所以需要一个标识位用于保存上次更新的结果，然后再用patch进行更新    
-            patch(container._vnode||null,vnode,container);// 如果有_vnode则进行比较再更新
+            patch(container?._vnode||null,vnode,container);// 如果有_vnode则进行比较再更新
             container._vnode = vnode; // 在挂载的容器上增添一个标识位，用于保存上一次的vnode
         }
     }
