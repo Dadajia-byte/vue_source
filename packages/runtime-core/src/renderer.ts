@@ -2,6 +2,14 @@ import {  ShapeFlags } from "@vue/shared";
 import { Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
 import { createComponentInstance,setupComponent } from "./component";
+
+/* 
+    组件更新有三种方式：
+    1. 状态 自身的state（data），构建effect，通过updateComponent
+    2. 属性 传入的props
+    3. 插槽 也是属性 childrens
+*/
+
 /** 
  * @param renderOptions 
  * @returns 
@@ -27,10 +35,8 @@ export function createRenderer(renderOptions) {
      * @param container 虚拟节点挂载的容器，这里也可见虚拟节点的container都是它的顶层（我一开始还以为是父节点哪里刚create的呢）
      */
     const mountChildren =(children,container)=>{
-        console.log(children,111);
         for(let i=0;i<children.length;i++) { // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
             // children[i]可能是纯文本元素
-            console.log(children[i]);
             patch(null,children[i],container); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
         }
     }
@@ -84,10 +90,13 @@ export function createRenderer(renderOptions) {
         if(n1===null) {
             // 1. 虚拟节点要关联真实dom
             // 2，将节点插入到页面中
+            console.log('初始化了');
+            
             hostInsert(n2.el=hostCreateText(n2.children),container);
         } else {
+            console.log(n2);
             if(n1.children !==n2.children) {
-                hostSetText(n2.children)
+                hostSetText(n2.el,n2.children)
             }
         }
     }
@@ -318,6 +327,7 @@ export function createRenderer(renderOptions) {
             } else {
                 // 基于状态的组件更新
                 const subTree = render.call(instance.proxy,instance.proxy);
+                
                 patch(instance.subTree,subTree,container,anchor); // 上一次的subTree和此次进行更新
                 instance.subTree = subTree;
             }
@@ -349,6 +359,39 @@ export function createRenderer(renderOptions) {
         // 3. 创建一个effect
         setupRenderEffect(instance,container,anchor);
     }
+    const hasPropsChange = (preProps,newProps)=>{
+        // 这里prop其实是 名：类型 键值对
+        let nKeys = Object.keys(newProps);
+        if(nKeys.length!==Object.keys(preProps).length) {
+            return true
+        } 
+        for(let i=0;i<nKeys.length;i++) {
+            let key = nKeys[i];
+            if(newProps[key]!==preProps[key]) {
+                return true
+            }
+        }
+        return false;
+    }
+    // 插槽更新可能也用到，所以抽离出来
+    const updateProps = (instance,newProps,preProps) => {
+        if(hasPropsChange(preProps,newProps)) {
+            for(let key in newProps) { // 遍历新属性，如果新属性有，就赋值，没有就删除
+                instance.props[key] = newProps[key];
+            };
+            for(let key in instance.props) {
+                if(!(key in newProps)) {
+                    delete instance.props[key];
+                }
+            }
+        }
+    }
+    const updateComponent = (n1,n2)=>{ 
+        const instance = (n2.component = n1.component); // 复用组件的实例; 再次声明，组件的复用是component，元素的复用是el
+        const {props :preProps} = n1;
+        const {props :newProps} = n2;
+        updateProps(instance,newProps,preProps);
+    }
     /**
      * 处理状态组件
      * @param n1 上一次的节点
@@ -368,7 +411,8 @@ export function createRenderer(renderOptions) {
         if(n1===null) {
             mountComponent(n2,container,anchor);
         } else {
-            patchComponent(n1,n2,container);
+            // 这里比较props的变化，实现响应式（n1和n2的变化追踪）
+            updateComponent(n1,n2); // 不能使用patch，因为会死循环
         }
     }
 
