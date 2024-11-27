@@ -1,3 +1,4 @@
+import { proxyRefs } from "@vue/reactivity"
 import { reactive } from "@vue/reactivity"
 import { hasOwn, isFunction } from "@vue/shared"
 /**
@@ -39,6 +40,7 @@ export function createComponentInstance(vnode) {
         */
         component:null, // 组件实例其实就是instance
         proxy:null, // 用来代理props，attrs，data让用户方便的访问
+        setupState:{}, // setup返回的状态
     }
     return instance
 }
@@ -80,14 +82,16 @@ const publicProperty = {
 // proxy 代理的handler
 const handler = {
     get(target,key) {
-        const {data,props} = target;
+        const {data,props,setupState} = target;
         // 先看状态再看props
         // 源码好像是先props 再看状态
         if(data && hasOwn(data,key)) {
             return data[key];
         } else if(props && hasOwn(props,key)) { // props
             return props[key];
-        } 
+        } else if(setupState && hasOwn(setupState,key)) { // setupState
+            return setupState[key];
+        }
 
         // 对于一些无法修改的属性 $slots、$attrs
         // 在外侧其实this.$attrs.要的属性 也是可以获取的，但不建议，外侧还是 proxy.$attrs.要的属性 好
@@ -97,7 +101,7 @@ const handler = {
         }
     },
     set(target,key,value) {
-        const {data,props} = target;
+        const {data,props,setupState} = target;
         // 先看状态再看props
         if(data && hasOwn(data,key)) {
             data[key]=value;
@@ -106,7 +110,9 @@ const handler = {
             props[key] =value;
             console.warn('props是只读');
             return false;
-        } 
+        }  else if (setupState && hasOwn(setupState,key)) {
+            setupState[key] = value;
+        }
         return true;
     }
 }
@@ -123,12 +129,31 @@ export function setupComponent(instance) {
     
     const {
         data=()=>{},
-        render
+        render,
+        setup
     } = vnode.type;
 
-    if(!isFunction(data)) return console.warn('data必须是函数');
+    if(setup) {
+        const setupContext ={
+            attrs:instance.attrs
+        }
+        const setupRes = setup(instance.props,setupContext);
+        if(isFunction(setupRes)) {
+            instance.render = setupRes;
+        } else {
+            instance.setupState = proxyRefs(setupRes); // 将返回的值做ref
+        }
+    }
 
-    // data可以拿到props
-    instance.data = reactive(data.call(instance.proxy));
-    instance.render = render;
+    if(!isFunction(data)) {
+        console.warn('data必须是函数');
+    } else {
+        // data可以拿到props
+        instance.data = reactive(data.call(instance.proxy));
+    }
+    // setup优先级要高于render
+    if(!instance.render) {
+        instance.render = render;
+    }
+    
 }
