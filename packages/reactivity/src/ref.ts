@@ -56,3 +56,26 @@ export function triggerRefValue(ref) {
 export function isRef(value) {
     return !!(value && value.__v_isRef)
 }
+
+export function unRef(ref) {
+    return isRef(ref)? ref.value: ref
+}
+/**
+ * @description 用于处理含ref的对象，访问其内部的ref时可以不用.value。主要用于setup函数
+ * @param objectWithRefs 含有ref的对象
+ * @returns proxy对象
+ */
+export function proxyRefs(objectWithRefs) {
+    return new Proxy(objectWithRefs,{
+        get(target,key) {
+            return unRef(Reflect.get(target,key))
+        },
+        set(target,key,value) {
+            if(isRef(target[key])&&!isRef(value)) {
+                return target[key].value = value
+            } else {
+                return Reflect.set(target,key,value)
+            }
+        } 
+    })
+}
