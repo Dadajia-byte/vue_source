@@ -38,7 +38,6 @@ export function createComponentInstance(vnode) {
             }
             为了方便区分，我们接下来就在注释中以props1作为subTree外侧h函数的props，props2作为subTree内侧的props属性，props3作为render函数中h的props
         */
-        component:null, // 组件实例其实就是instance
         proxy:null, // 用来代理props，attrs，data让用户方便的访问
         setupState:{}, // setup返回的状态
     }
@@ -71,7 +70,7 @@ const initProps = (instance,rawProps)=>{
             }
         }
     }
-    instance.props = reactive(props); // props 不需要深度代理，因为组件内部是不能改外部传进来的属性的，但是我没写过shallowReactive（悲）
+    instance.props =     (props); // props 不需要深度代理，因为组件内部是不能改外部传进来的属性的，但是我没写过shallowReactive（悲）
     instance.attrs = attrs; // 其实吧，虽说$attrs是非响应式的，到那时其实在开发环境下，它是响应式的（为了方便）
 }
 
@@ -106,7 +105,7 @@ const handler = {
         if(data && hasOwn(data,key)) {
             data[key]=value;
         } else if(props && hasOwn(props,key)) { // props
-            // 我们用户可以修改属性的嵌套属性，这不合法！
+            // 我们用户可以修改属性的嵌套属性，但这不合法！
             props[key] =value;
             console.warn('props是只读');
             return false;
@@ -124,7 +123,7 @@ export function setupComponent(instance) {
     initProps(instance,vnode.props); 
     
     // -- 赋值代理对象 --
-    // 实现完成后，组件里的this应该能访问到props，$attrs，组件自己写得data
+    // 指向组件实例的代理对象   render(proxy)
     instance.proxy = new Proxy(instance,handler);
     
     const {

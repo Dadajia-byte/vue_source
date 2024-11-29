@@ -93,9 +93,9 @@ export function createRenderer(renderOptions) {
          
             hostInsert(n2.el=hostCreateText(n2.children),container);
         } else {
-            console.log(n2);
-            if(n1.children !==n2.children) {
-                hostSetText(n2.el,n2.children)
+            debugger;
+            if(n1.children !==n2.children) {   
+                hostSetText(n2.el=n1.el,n2.children); // 复用n1的el，并更新文本
             }
         }
     }
@@ -322,11 +322,11 @@ export function createRenderer(renderOptions) {
 
     function setupRenderEffect(instance,container,anchor) {
         const {render} = instance;
-        const componentUpdate = ()=>{
+        const componentUpdate = ()=>{ // 更新函数
             // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
-            if (!instance.isMounted) {
-                const subTree = render.call(instance.proxy,instance.proxy); // 内部使用了this
-                patch(null,subTree,container,anchor);
+            if (!instance.isMounted) { // 未被挂载过（第一次）
+                const subTree = render.call(instance.proxy,instance.proxy); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
+                patch(null,subTree,container,anchor); // 向下走一层，实现对subTree的挂载
                 instance.isMounted = true;
                 instance.subTree = subTree;
             } else {
@@ -407,7 +407,7 @@ export function createRenderer(renderOptions) {
 
         // updateProps(instance,preProps,newProps);
     }
-    const updateComponent = (n1,n2)=>{ 
+    const updateComponent = (n1,n2)=>{
         const instance = (n2.component = n1.component); // 复用组件的实例; 再次声明，组件的复用是component，元素的复用是el
         // 让更新逻辑统一
         if(shouldComponentUpdate(n1,n2)) {
@@ -450,12 +450,12 @@ export function createRenderer(renderOptions) {
     const patch = (n1,n2,container,anchor=null)=>{
         if(n1===n2) { // 如果两次渲染同一个节点则跳过
             return;
-        }
+        };
         if(n1 && !isSameVnode(n1,n2)) { // 判断两个节点是不是同一个
             // 如果是更新操作（n1!==null），且两个节点不一样，则直接进行全量替换（不进行diff）
             unmount(n1); // 卸载n1
             n1=null;//自动会走后面的逻辑了，变成初次渲染了
-        }
+        };
         const {type, shapeFlag} = n2; // 获取节点类型，针对不同类型进行不同处理
         switch(type) {
             case Text: // Text节点
@@ -478,7 +478,7 @@ export function createRenderer(renderOptions) {
      * @param vnode 传入的虚拟节点，它是来自它挂载的容器（container）身上的_vnode属性
      * @returns 
      */
-    const unmount =(vnode)=>{
+    const unmount =(vnode)=> {
         if(vnode.type===Fragment) {
             unmountChildren(vnode.children);
         } else {
@@ -491,14 +491,14 @@ export function createRenderer(renderOptions) {
      * @param vnode 传入的虚拟节点
      * @param container 传入的容器（虚拟节点需要挂在的真实dom），他身上在经历render之后会有一个_vnode属性，用于保存上一次的vnode，同时也用于标识这个dom曾经被挂载过虚拟节点
      */
-    const render = (vnode,container) =>{
+    const render = (vnode,container) => {
         // 将虚拟节点变成真实节点
         if(vnode===null) { // 如果传入的虚拟节点是null，则需要删除上次挂载这个容器上的虚拟节点（还需要保证这个容器已经挂载过虚拟节点了）
             if(container._vnode) {
                 unmount(container._vnode)
             }
         } else {
-            // 这里渲染分为第一次渲染和后续渲染（更新），所以需要一个标识位用于保存上次更新的结果，然后再用patch进行更新    
+            // 这里渲染分为第一次渲染和后续渲染（更新），所以需要一个标识位用于保存上次更新的结果，然后再用patch进行更新  
             patch(container?._vnode||null,vnode,container);// 如果有_vnode则进行比较再更新
             container._vnode = vnode; // 在挂载的容器上增添一个标识位，用于保存上一次的vnode
         }

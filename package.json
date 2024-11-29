@@ -15,8 +15,7 @@
     "@vue/reactivity": "^3.5.11",
     "@vue/runtime-core": "^3.5.11",
     "@vue/shared": "^3.5.11",
-    "postcss": "^8.4.47",
-    "vue": "^3.5.8"
+    "postcss": "^8.4.47"
   },
   "devDependencies": {
     "esbuild": "^0.23.1",
