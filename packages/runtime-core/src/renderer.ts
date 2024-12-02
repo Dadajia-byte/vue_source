@@ -325,12 +325,13 @@ export function createRenderer(renderOptions) {
         const componentUpdate = ()=>{ // 更新函数
             // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
             if (!instance.isMounted) { // 未被挂载过（第一次）
+                debugger;
                 const subTree = render.call(instance.proxy,instance.proxy); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
                 patch(null,subTree,container,anchor); // 向下走一层，实现对subTree的挂载
                 instance.isMounted = true;
                 instance.subTree = subTree;
             } else {
-                
+                debugger;
                 const {next } = instance;
                 if(next) { // 分开两边写更新实在太变态，这里通过next来判断是否为属性或插槽更新
                     // 更新属性和插槽
@@ -370,6 +371,7 @@ export function createRenderer(renderOptions) {
         setupRenderEffect(instance,container,anchor);
     }
     const hasPropsChange = (preProps,newProps)=>{
+        debugger;
         // 这里prop其实是 名：类型 键值对
         let nKeys = Object.keys(newProps);
         if(nKeys.length!==Object.keys(preProps).length) {
@@ -385,6 +387,7 @@ export function createRenderer(renderOptions) {
     }
     // 插槽更新可能也用到，所以抽离出来
     const updateProps = (instance,preProps,newProps) => {
+        debugger;
         if(hasPropsChange(preProps,newProps)) {
             for(let key in newProps) { // 遍历新属性，如果新属性有，就赋值，没有就删除
                 instance.props[key] = newProps[key];
@@ -397,20 +400,19 @@ export function createRenderer(renderOptions) {
         }
     }
     const shouldComponentUpdate = (n1,n2)=>{
-        const {props :preProps,children:prevChildren} = n1;
-        const {props :newProps,children:nextChildren} = n2;
+        debugger;
+        const {props:preProps,children:prevChildren} = n1;
+        const {props:newProps,children:nextChildren} = n2;
         if (prevChildren || nextChildren) return true; // 如果有插槽，直接走更新渲染即可
         if(preProps === newProps) return false; // 如果属性一样，不需要更新
-        
         // 如果属性不一样，需要更新
         return hasPropsChange(preProps,newProps); // 如果属性不一样，需要更新
-
-        // updateProps(instance,preProps,newProps);
     }
     const updateComponent = (n1,n2)=>{
         const instance = (n2.component = n1.component); // 复用组件的实例; 再次声明，组件的复用是component，元素的复用是el
         // 让更新逻辑统一
         if(shouldComponentUpdate(n1,n2)) {
+            debugger;
             instance.next = n2; // 如果调用update 有next属性，说明是属性或插槽更新
             instance.update();
         }
@@ -434,6 +436,7 @@ export function createRenderer(renderOptions) {
         if(n1===null) {
             mountComponent(n2,container,anchor);
         } else {
+            debugger;
             // 这里比较props的变化，实现响应式（n1和n2的变化追踪）
             updateComponent(n1,n2); // 不能使用patch，因为会死循环
         }
@@ -448,6 +451,7 @@ export function createRenderer(renderOptions) {
      * @returns 
      */
     const patch = (n1,n2,container,anchor=null)=>{
+        debugger;
         if(n1===n2) { // 如果两次渲染同一个节点则跳过
             return;
         };

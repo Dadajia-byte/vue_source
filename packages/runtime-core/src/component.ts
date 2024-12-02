@@ -70,7 +70,7 @@ const initProps = (instance,rawProps)=>{
             }
         }
     }
-    instance.props =     (props); // props 不需要深度代理，因为组件内部是不能改外部传进来的属性的，但是我没写过shallowReactive（悲）
+    instance.props = reactive(props); // props 不需要深度代理，因为组件内部是不能改外部传进来的属性的，但是我没写过shallowReactive（悲）
     instance.attrs = attrs; // 其实吧，虽说$attrs是非响应式的，到那时其实在开发环境下，它是响应式的（为了方便）
 }
 
