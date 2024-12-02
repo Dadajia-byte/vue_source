@@ -41,6 +41,7 @@ export function createComponentInstance(vnode) {
         */
         proxy:null, // 用来代理props，attrs，data让用户方便的访问
         setupState:{}, // setup返回的状态
+        exposed:null, // 暴露给外部的属性
     }
     return instance
 }
@@ -148,7 +149,16 @@ export function setupComponent(instance) {
 
     if(setup) {
         const setupContext ={
-            attrs:instance.attrs
+            attrs:instance.attrs,
+            slots:instance.slots,
+            expose:(value)=>{
+                instance.exposed = value
+            },
+            emit(event,...payload) {
+                const eventName = `on${event[0].toUpperCase()+event.slice(1)}`
+                const handler = instance.vnode.props[eventName];
+                handler && handler(...payload);
+            }
         }
         const setupRes = setup(instance.props,setupContext);
         if(isFunction(setupRes)) {

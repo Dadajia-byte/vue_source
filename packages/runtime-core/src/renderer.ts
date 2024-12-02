@@ -483,8 +483,12 @@ export function createRenderer(renderOptions) {
      * @returns 
      */
     const unmount =(vnode)=> {
+        const {shapeFlag} = vnode;
         if(vnode.type===Fragment) {
             unmountChildren(vnode.children);
+        } else if(shapeFlag & ShapeFlags.COMPONENT) {
+            // 卸载组件
+            unmount(vnode.component.subTree);
         } else {
             hostRemove(vnode.el);
         }
