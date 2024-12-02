@@ -325,13 +325,13 @@ export function createRenderer(renderOptions) {
         const componentUpdate = ()=>{ // 更新函数
             // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
             if (!instance.isMounted) { // 未被挂载过（第一次）
-                debugger;
+                console.log(instance.proxy,'proxy');
+                
                 const subTree = render.call(instance.proxy,instance.proxy); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
                 patch(null,subTree,container,anchor); // 向下走一层，实现对subTree的挂载
                 instance.isMounted = true;
                 instance.subTree = subTree;
             } else {
-                debugger;
                 const {next } = instance;
                 if(next) { // 分开两边写更新实在太变态，这里通过next来判断是否为属性或插槽更新
                     // 更新属性和插槽
@@ -364,7 +364,7 @@ export function createRenderer(renderOptions) {
         // 1. 先创建组件实例
         const instance = (n2.component = createComponentInstance(n2));
         
-        // 2. 给实例属性赋值
+        // 2. 给实例属性/插槽等赋值
         setupComponent(instance);
 
         // 3. 创建一个effect

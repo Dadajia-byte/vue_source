@@ -45,11 +45,13 @@ export function createVnode(type,props,children?) { // 绝对标准的h方法，
     if(children) {
         if(Array.isArray(children)) {
             vnode.shapeFlag |= ShapeFlags.ARRAY_CHILDREN;
+        } else if(isObject(children)) { // 第三个参数是对象说明是插槽
+            debugger;
+            vnode.shapeFlag |= ShapeFlags.SLOTS_CHILDREN;
         } else {
             children = String(children);
             vnode.shapeFlag |= ShapeFlags.TEXT_CHILDREN;
         }
     }
     return vnode;
-    
 }

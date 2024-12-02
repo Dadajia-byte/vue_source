@@ -1,6 +1,6 @@
 import { proxyRefs } from "@vue/reactivity"
 import { reactive } from "@vue/reactivity"
-import { hasOwn, isFunction } from "@vue/shared"
+import { hasOwn, isFunction,ShapeFlags } from "@vue/shared"
 /**
  * 创建组件实例
  * @param vnode 
@@ -20,6 +20,7 @@ export function createComponentInstance(vnode) {
         update:null, // 组件的更新函数
         props:{}, 
         attrs:{}, // 没有$，挂载在instance上的是没有$的，实际this却是有的，原因是因为用了proxy代理映射
+        slots:{}, // 插槽
         propsOptions:vnode.type.props,
         // 这里需要对props有一个明确的区分
         /* 
@@ -74,9 +75,19 @@ const initProps = (instance,rawProps)=>{
     instance.attrs = attrs; // 其实吧，虽说$attrs是非响应式的，到那时其实在开发环境下，它是响应式的（为了方便）
 }
 
+const initSlots = (instance,children) => {
+    if(instance.vnode.shapeFlag & ShapeFlags.SLOTS_CHILDREN) { 
+        debugger;
+        instance.slots = children;
+    } else {
+        instance.slots = {};
+    }
+}
+
 // $attrs 映射表
 const publicProperty = {
     $attrs:(instance)=>instance.attrs, // 不能写成$attrs:instance.attrs哦，这样就写死了，还是要根据传入的target返回的
+    $slots:(instance)=>instance.slots
 }
 // proxy 代理的handler
 const handler = {
@@ -122,6 +133,9 @@ export function setupComponent(instance) {
     // -- 赋值属性 --
     initProps(instance,vnode.props); 
     
+    // -- 赋值插槽 --
+    initSlots(instance,vnode.children);
+
     // -- 赋值代理对象 --
     // 指向组件实例的代理对象   render(proxy)
     instance.proxy = new Proxy(instance,handler);
