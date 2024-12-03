@@ -17,6 +17,7 @@ import { createComponentInstance,setupComponent } from "./component";
  */
 import {ReactiveEffect} from "@vue/reactivity";
 import { queueJob } from "./sheduler";
+import { invokeArrayFns } from "./apiLifecycle";
 export function createRenderer(renderOptions) {
     const {
         insert:hostInsert,
@@ -324,23 +325,38 @@ export function createRenderer(renderOptions) {
         const {render} = instance;
         const componentUpdate = ()=>{ // 更新函数
             // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
+            const {bm,m,bu,u} = instance; // 拿到生命周期钩子
             if (!instance.isMounted) { // 未被挂载过（第一次）
-                console.log(instance.proxy,'proxy');
+                if(bm) { // 挂载前
+                    invokeArrayFns(bm);
+                }
                 
                 const subTree = render.call(instance.proxy,instance.proxy); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
-                patch(null,subTree,container,anchor); // 向下走一层，实现对subTree的挂载
+                patch(null,subTree,container,anchor); // 向下走一层，实现对subTree的初次挂载
                 instance.isMounted = true;
                 instance.subTree = subTree;
+
+                if(m) { // 挂载后
+                    invokeArrayFns(m);
+                }
             } else {
                 const {next } = instance;
                 if(next) { // 分开两边写更新实在太变态，这里通过next来判断是否为属性或插槽更新
                     // 更新属性和插槽
                     updateComponentPreRender(instance,next);
                 }
+
+                if(bu) {
+                    invokeArrayFns(bu);
+                }
                 // 基于状态的组件更新
                 const subTree = render.call(instance.proxy,instance.proxy);
                 patch(instance.subTree,subTree,container,anchor); // 上一次的subTree和此次进行更新
                 instance.subTree = subTree;
+                
+                if(u) {
+                    invokeArrayFns(u);
+                }
             }
         }
         // 这里不直接使用update作为scheduler，而是再包装实现批处理

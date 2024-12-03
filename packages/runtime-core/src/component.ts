@@ -166,7 +166,7 @@ export function setupComponent(instance) {
         if(isFunction(setupRes)) {
             instance.render = setupRes;
         } else {
-            instance.setupState = proxyRefs(setupRes); // 将返回的值做ref
+            instance.setupState = proxyRefs(setupRes||{}); // 将返回的值做ref
         }
     }
 
