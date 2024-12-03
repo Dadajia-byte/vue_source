@@ -160,7 +160,9 @@ export function setupComponent(instance) {
                 handler && handler(...payload);
             }
         }
+        setCurrentInstance(instance);
         const setupRes = setup(instance.props,setupContext);
+        unsetCurrentInstance();
         if(isFunction(setupRes)) {
             instance.render = setupRes;
         } else {
@@ -179,4 +181,17 @@ export function setupComponent(instance) {
         instance.render = render;
     }
     
+}
+
+export let currentInstance = null;
+export const getCurrentInstance = ()=>{
+    return currentInstance;
+}
+
+export const setCurrentInstance = (instance)=>{
+    currentInstance = instance;
+}
+
+export const unsetCurrentInstance = ()=>{
+    currentInstance = null;
 }
