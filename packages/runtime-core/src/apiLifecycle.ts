@@ -12,7 +12,6 @@ function createHook(type: Lifecycle) {
     if(target) {
         // 发布订阅。看当前钩子是否存放过
         const hooks = target[type] || (target[type] = []);
-
         // 让currentInstance存到这个钩子里
         const wrapHook = ()=>{ // 这样这个钩子内部的instance就是正确的instance
             setCurrentInstance(target);

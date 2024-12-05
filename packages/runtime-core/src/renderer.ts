@@ -15,7 +15,7 @@ import { createComponentInstance,setupComponent } from "./component";
  * @returns 
  * @description 创建渲染器，渲染器是一个对象，包含一个render方法，用于渲染虚拟节点
  */
-import {ReactiveEffect} from "@vue/reactivity";
+import {isRef, ReactiveEffect} from "@vue/reactivity";
 import { queueJob } from "./sheduler";
 import { invokeArrayFns } from "./apiLifecycle";
 export function createRenderer(renderOptions) {
@@ -353,7 +353,7 @@ export function createRenderer(renderOptions) {
                 const subTree = render.call(instance.proxy,instance.proxy);
                 patch(instance.subTree,subTree,container,anchor); // 上一次的subTree和此次进行更新
                 instance.subTree = subTree;
-                
+
                 if(u) {
                     invokeArrayFns(u);
                 }
@@ -452,7 +452,6 @@ export function createRenderer(renderOptions) {
         if(n1===null) {
             mountComponent(n2,container,anchor);
         } else {
-            debugger;
             // 这里比较props的变化，实现响应式（n1和n2的变化追踪）
             updateComponent(n1,n2); // 不能使用patch，因为会死循环
         }
@@ -467,7 +466,6 @@ export function createRenderer(renderOptions) {
      * @returns 
      */
     const patch = (n1,n2,container,anchor=null)=>{
-        debugger;
         if(n1===n2) { // 如果两次渲染同一个节点则跳过
             return;
         };
@@ -476,7 +474,7 @@ export function createRenderer(renderOptions) {
             unmount(n1); // 卸载n1
             n1=null;//自动会走后面的逻辑了，变成初次渲染了
         };
-        const {type, shapeFlag} = n2; // 获取节点类型，针对不同类型进行不同处理
+        const {type,ref, shapeFlag} = n2; // 获取节点类型，针对不同类型进行不同处理
         switch(type) {
             case Text: // Text节点
                 processText(n1,n2,container); // 处理文本
@@ -491,6 +489,20 @@ export function createRenderer(renderOptions) {
                     // 对组件的处理，需要注意的是vue3中的函数式组件已经弃用了，因为不节约性能
                     processComponent(n1,n2,container,anchor);
                 }
+        }
+        if(ref!==null) {
+            // n2 是dom元素还是组件，还是组件有expose
+            setRef(ref, n2)
+        }
+    }
+    // 1. 内部 如果ref放到组件上，值得是组件的实例，如果当前组件有expose，值得是expose
+    // 2. 如果放到dom元素上，值得是dom元素
+    function setRef(rawRef,vnode) {
+        let value =  vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT ? 
+            vnode.component.exposed || vnode.component.proxy 
+            : vnode.el;
+        if(isRef(rawRef)) {
+            rawRef.value = value;
         }
     }
     /**

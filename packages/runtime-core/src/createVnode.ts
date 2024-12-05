@@ -41,6 +41,7 @@ export function createVnode(type,props,children?) { // 绝对标准的h方法，
         key:props?.key, // diff算法后面需要的key
         el:null,// 虚拟节点需要对应的真实节点是谁
         shapeFlag, // 这玩意儿是父与子元素的shapeFlag之和，代表着虚拟节点的类型
+        ref:props?.ref
     }
     if(children) {
         if(Array.isArray(children)) {
