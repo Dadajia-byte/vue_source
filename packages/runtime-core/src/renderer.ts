@@ -320,6 +320,14 @@ export function createRenderer(renderOptions) {
         instance.vnode = next; 
         updateProps(instance,instance.props,next.props); // 更新属性
     }
+    function renderComponent(instance) {
+        const {render,vnode,proxy,props,attrs} = instance;
+        if(vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) { // 有状态组件
+            return render.call(proxy,proxy);
+        } else { // 函数式组件
+            return vnode.type(attrs)
+        }
+    }
 
     function setupRenderEffect(instance,container,anchor) {
         const {render} = instance;
@@ -331,7 +339,7 @@ export function createRenderer(renderOptions) {
                     invokeArrayFns(bm);
                 }
                 
-                const subTree = render.call(instance.proxy,instance.proxy); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
+                const subTree = renderComponent(instance); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
                 patch(null,subTree,container,anchor); // 向下走一层，实现对subTree的初次挂载
                 instance.isMounted = true;
                 instance.subTree = subTree;
@@ -350,7 +358,7 @@ export function createRenderer(renderOptions) {
                     invokeArrayFns(bu);
                 }
                 // 基于状态的组件更新
-                const subTree = render.call(instance.proxy,instance.proxy);
+                const subTree = renderComponent(instance);
                 patch(instance.subTree,subTree,container,anchor); // 上一次的subTree和此次进行更新
                 instance.subTree = subTree;
 

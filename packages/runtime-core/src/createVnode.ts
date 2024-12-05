@@ -1,4 +1,4 @@
-import {isObject, isString, ShapeFlags} from "@vue/shared";
+import {isObject, isString, ShapeFlags,isFunction} from "@vue/shared";
 // 虽然标准但是这里的children仍可能是文本，vn数组（就算只有一个vn也必须变成数组），所以需要做判断
 export const Text = Symbol('Text');
 export const Fragment = Symbol('Fragment');
@@ -31,7 +31,9 @@ export function createVnode(type,props,children?) { // 绝对标准的h方法，
     const shapeFlag = isString(type)
         ? ShapeFlags.ELEMENT /*元素*/
         : isObject(type)
-        ? ShapeFlags.STATEFUL_COMPONENT /*有状态组件*/
+        ? ShapeFlags.STATEFUL_COMPONENT  /*有状态组件*/
+        : isFunction(type)
+        ? ShapeFlags.FUNCTIONAL_COMPONENT /*函数式组件*/
         : 0; /* 文本节点 */
     const vnode = {
         __v_isVnode:true,// 标识该对象是虚拟节点
