@@ -505,10 +505,19 @@ export function createRenderer(renderOptions) {
             default:
                 if (shapeFlag & ShapeFlags.ELEMENT) { // 对元素处理，或初始化或复用节点
                  processElement(n1,n2,container,anchor,parentComponent);
+                } else if (shapeFlag & ShapeFlags.TELEPORT) { // Teleport节点
+                    type.process(n1,n2,container,anchor,parentComponent, {
+                        mountChildren,
+                        patchChildren,
+                        // 此方法可以将组件或者dom移动到指定位置
+                        move(vnode,container,anchor) {
+                            hostInsert(vnode.component?vnode.component.subTree.el:vnode.el,container,anchor)
+                        }
+                    });
                 } else if (shapeFlag & ShapeFlags.COMPONENT) { // 组件的处理(包含了状态组件和函数组件)
                     // 对组件的处理，需要注意的是vue3中的函数式组件已经弃用了，因为不节约性能
                     processComponent(n1,n2,container,anchor,parentComponent);
-                }
+                } 
         }
         if(ref!==null) {
             // n2 是dom元素还是组件，还是组件有expose
@@ -537,9 +546,11 @@ export function createRenderer(renderOptions) {
         } else if(shapeFlag & ShapeFlags.COMPONENT) {
             // 卸载组件
             unmount(vnode.component.subTree);
+        } else if(shapeFlag & ShapeFlags.TELEPORT) {
+            vnode.type.remove(vnode,unmountChildren);
         } else {
             hostRemove(vnode.el);
-        }
+        } 
     }
     // core中不关心如何渲染
     /**
