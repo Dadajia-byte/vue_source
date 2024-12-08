@@ -1,5 +1,5 @@
 import {  ShapeFlags } from "@vue/shared";
-import { Fragment, isSameVnode, Text } from "./createVnode";
+import { createVnode, Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
 import { createComponentInstance,setupComponent } from "./component";
 
@@ -30,15 +30,25 @@ export function createRenderer(renderOptions) {
         nextSibling:hostNextSibling,
         patchProp:hostPatchProp,
     } = renderOptions; // 解构渲染DomAPI
+    const normalize = (children)=>{
+        for(let i = 0;i<children.length;i++) {
+            if(typeof children[i]==='string' || typeof children[i] === 'number') { // 儿子是文本数组，可以实现简写
+                children[i]= createVnode(Text,null,String(children[i]));
+            }
+        }
+        return children;
+    }
+
     /**
      * 用于挂载子元素
      * @param children 虚拟节点的childrens
      * @param container 虚拟节点挂载的容器，这里也可见虚拟节点的container都是它的顶层（我一开始还以为是父节点哪里刚create的呢）
      */
-    const mountChildren =(children,container)=>{
+    const mountChildren =(children,container,parentComponent)=>{
+        normalize(children);
         for(let i=0;i<children.length;i++) { // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
             // children[i]可能是纯文本元素
-            patch(null,children[i],container); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
+            patch(null,children[i],container,parentComponent); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
         }
     }
     /**
@@ -48,7 +58,7 @@ export function createRenderer(renderOptions) {
      * @param container 本次被挂载的容器
      * @param anchor 锚点，在全量diff中目前似乎没有用处
      */
-    const mountElement =(vnode,container,anchor)=>{
+    const mountElement =(vnode,container,anchor,parentComponent)=>{
         const {type,children,props,shapeFlag} = vnode; // 解构虚拟节点，并依次处理对应的属性
         // 第一次渲染的时候让虚拟节点和真实dom创建关联
         // 第二次渲染新的vnode，可以和上一次的vnode作对比，之后更新对应的el元素
@@ -69,7 +79,7 @@ export function createRenderer(renderOptions) {
         if(shapeFlag & ShapeFlags.TEXT_CHILDREN) { // 子元素是文本节点
             hostSetElementText(el,children) // 设置文本，你可以简单理解为给el这个dom的innnerText赋值
         } else if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 子元素是数组，既然子元素是数组（虚拟节点数组），当然要继续处理下去喽，当然使用patch就行了，但是这里单独多拉出来一个方法，是为了更好的逻辑分离
-            mountChildren(children,el); // 递归挂载子元素
+            mountChildren(children,el,parentComponent); // 递归挂载子元素
         }
         hostInsert(el,container);
     }
@@ -80,11 +90,11 @@ export function createRenderer(renderOptions) {
      * @param container 本次被挂载的容器
      * @param anchor 锚点，用于diff算法插入的位置
      */
-    const processElement = (n1,n2,container,anchor)=>{
+    const processElement = (n1,n2,container,anchor,parentComponent)=>{
         if(n1===null) { // 初始化(或者n1和n2不是一个节点强制初始化)
-            mountElement(n2,container,anchor) // 挂载元素
+            mountElement(n2,container,anchor,parentComponent) // 挂载元素
         } else {
-            patchElement(n1,n2,container);// 非初始化，且复用节点更新
+            patchElement(n1,n2,container,parentComponent);// 非初始化，且复用节点更新
         }
     }
     const processText = (n1,n2,container) =>{
@@ -101,11 +111,11 @@ export function createRenderer(renderOptions) {
         }
     }
 
-    const processFragment = (n1,n2,container)=>{
+    const processFragment = (n1,n2,container,parentComponent)=>{
         if(n1===null) {   
-            mountChildren(n2.children,container);
+            mountChildren(n2.children,container,parentComponent);
         } else {
-            patchChildren(n1,n2,container);
+            patchChildren(n1,n2,container,parentComponent);
         }
     }
     /**
@@ -242,10 +252,10 @@ export function createRenderer(renderOptions) {
      * @param n2 新虚拟节点
      * @param el dom
      */
-    const patchChildren = (n1,n2,el)=>{ // 比较子节点的props进行更新
+    const patchChildren = (n1,n2,el,parentComponent)=>{ // 比较子节点的props进行更新
         // 子节点类型 text null array
         const c1 = n1.children;
-        const c2 = n2.children;
+        const c2 = normalize(n2.children);
         const prevShapeFlag = n1.shapeFlag;
         const shapeFlag = n2.shapeFlag;
         /* 比较情况
@@ -289,7 +299,7 @@ export function createRenderer(renderOptions) {
                 hostSetElementText(el,'')
             }
             if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 老文本，新数组
-                mountChildren(c2,el)
+                mountChildren(c2,el,parentComponent)
             }
         }    
        }
@@ -300,7 +310,7 @@ export function createRenderer(renderOptions) {
      * @param n2 此次挂载的虚拟节点
      * @description 依次对 dom、props、children 进行比较更新。
      */
-    const patchElement = (n1,n2)=>{
+    const patchElement = (n1,n2,parentComponent)=>{
         // 1. 比较元素的差异，肯定需要复用dom元素
         // 2. 比较属性和元素的子节点
         let el =n2.el=n1.el; // 对dom元素的复用，创建引用连接，确保el修改后会对n2，n1产生影响
@@ -312,7 +322,7 @@ export function createRenderer(renderOptions) {
         patchProps(newProps,oldProps,el); // 比完父级比子级，一级一级比较
 
         // --- children比较 ---
-        patchChildren(n1,n2,el)
+        patchChildren(n1,n2,el,parentComponent)
     }
     const updateComponentPreRender = (instance,next)=>{ 
         // 更新属性和插槽
@@ -330,7 +340,6 @@ export function createRenderer(renderOptions) {
     }
 
     function setupRenderEffect(instance,container,anchor) {
-        const {render} = instance;
         const componentUpdate = ()=>{ // 更新函数
             // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
             const {bm,m,bu,u} = instance; // 拿到生命周期钩子
@@ -340,7 +349,7 @@ export function createRenderer(renderOptions) {
                 }
                 
                 const subTree = renderComponent(instance); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
-                patch(null,subTree,container,anchor); // 向下走一层，实现对subTree的初次挂载
+                patch(null,subTree,container,anchor,instance); // 向下走一层，实现对subTree的初次挂载
                 instance.isMounted = true;
                 instance.subTree = subTree;
 
@@ -359,7 +368,7 @@ export function createRenderer(renderOptions) {
                 }
                 // 基于状态的组件更新
                 const subTree = renderComponent(instance);
-                patch(instance.subTree,subTree,container,anchor); // 上一次的subTree和此次进行更新
+                patch(instance.subTree,subTree,container,anchor,instance); // 上一次的subTree和此次进行更新
                 instance.subTree = subTree;
 
                 if(u) {
@@ -384,15 +393,18 @@ export function createRenderer(renderOptions) {
      * @param container 挂载的容器
      * @param anchor 锚点
      */
-    const mountComponent = (n2,container,anchor)=>{
+    const mountComponent = (n2,container,anchor,parentComponent)=>{
         // 1. 先创建组件实例
-        const instance = (n2.component = createComponentInstance(n2));
+        const instance = (n2.component = createComponentInstance(
+            n2,
+            parentComponent
+        ));
         
         // 2. 给实例属性/插槽等赋值
         setupComponent(instance);
 
         // 3. 创建一个effect
-        setupRenderEffect(instance,container,anchor);
+        setupRenderEffect(instance,container,anchor,parentComponent);
     }
     const hasPropsChange = (preProps,newProps)=>{
         debugger;
@@ -456,12 +468,12 @@ export function createRenderer(renderOptions) {
      * @param container 挂载容器
      * @param anchor 锚点
      */
-    const processComponent = (n1,n2,container,anchor)=>{
+    const processComponent = (n1,n2,container,anchor,parentComponent)=>{
         if(n1===null) {
-            mountComponent(n2,container,anchor);
+            mountComponent(n2,container,anchor,parentComponent);
         } else {
             // 这里比较props的变化，实现响应式（n1和n2的变化追踪）
-            updateComponent(n1,n2); // 不能使用patch，因为会死循环
+            updateComponent(n1,n2,parentComponent); // 不能使用patch，因为会死循环
         }
     }
 
@@ -473,7 +485,7 @@ export function createRenderer(renderOptions) {
      * @param anchor 锚点默认为null
      * @returns 
      */
-    const patch = (n1,n2,container,anchor=null)=>{
+    const patch = (n1,n2,container,anchor=null,parentComponent = null)=>{
         if(n1===n2) { // 如果两次渲染同一个节点则跳过
             return;
         };
@@ -488,14 +500,14 @@ export function createRenderer(renderOptions) {
                 processText(n1,n2,container); // 处理文本
                 break;
             case Fragment: // Fragment节点
-                processFragment(n1,n2,container); // 处理Fragment
+                processFragment(n1,n2,container,parentComponent); // 处理Fragment
                 break;
             default:
                 if (shapeFlag & ShapeFlags.ELEMENT) { // 对元素处理，或初始化或复用节点
-                 processElement(n1,n2,container,anchor);
+                 processElement(n1,n2,container,anchor,parentComponent);
                 } else if (shapeFlag & ShapeFlags.COMPONENT) { // 组件的处理(包含了状态组件和函数组件)
                     // 对组件的处理，需要注意的是vue3中的函数式组件已经弃用了，因为不节约性能
-                    processComponent(n1,n2,container,anchor);
+                    processComponent(n1,n2,container,anchor,parentComponent);
                 }
         }
         if(ref!==null) {

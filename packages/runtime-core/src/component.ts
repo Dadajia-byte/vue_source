@@ -8,7 +8,7 @@ import { hasOwn, isFunction,ShapeFlags } from "@vue/shared"
  * @description 后续很多操作其实都是将vueComponent这个对象上的属性迁移到instance这个组件实例上，我再看这段代码的时候有点疑惑为什么要多此一举呢，直接使用vueComponent不就行了吗，最多对几个属性分分类重命名一下不就行了吗？
  * 原来我忘了状态隔离这个重要的功能，可能有多个地方用到这个组件，肯定对每个组件都要单独new一个实例（虽然这里不是new的形式而是工厂函数）
  */
-export function createComponentInstance(vnode) {
+export function createComponentInstance(vnode,parent) {
     // 属性分为两种 $attrs(非响应式的) 和 props(响应式的)
     // 所有属性 - propsOptions = $attrs
     // 简单理解起来就是，外面传进来的属性，只要没有用defineProps定义成props或者组件内部自己写props，全都是$attrs
@@ -42,6 +42,9 @@ export function createComponentInstance(vnode) {
         proxy:null, // 用来代理props，attrs，data让用户方便的访问
         setupState:{}, // setup返回的状态
         exposed:null, // 暴露给外部的属性
+        parent, // 关联的父组件
+        // 所有的组件provide都一样 ，parent = {...} , child = 引用对象
+        provides: parent ? parent.provides : Object.create(null) // Object.create(null) 为了防止原型链上的属性干扰
     }
     return instance
 }
