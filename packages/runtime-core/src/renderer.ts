@@ -2,6 +2,15 @@ import { ShapeFlags } from "@vue/shared";
 import { createVnode, Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
 import { createComponentInstance, setupComponent } from "./component";
+/* 
+  渲染的流程不同节点大致都相似，主要有以下几点：
+  1. mount 初次挂载
+  2. patch 更新
+    2.1 patchElement 更新元素
+    2.2 patchProps 更新属性
+    2.3 patchChildren 更新子节点
+  3. unmount 卸载
+*/
 
 /* 
     组件更新有三种方式：
@@ -30,6 +39,11 @@ export function createRenderer(renderOptions) {
     nextSibling: hostNextSibling,
     patchProp: hostPatchProp,
   } = renderOptions; // 解构渲染DomAPI
+  /**
+   * @description 对于子节点是文本节点（数组）的情况，需要对子节点进行规范化处理
+   * @param children 虚拟节点的childrens
+   * @returns 规范化后的的childrens
+   */
   const normalize = (children) => {
     for (let i = 0; i < children.length; i++) {
       if (typeof children[i] === "string" || typeof children[i] === "number") {
@@ -42,14 +56,14 @@ export function createRenderer(renderOptions) {
 
   /**
    * 用于挂载子元素
-   * @param children 虚拟节点的childrens
-   * @param container 虚拟节点挂载的容器，这里也可见虚拟节点的container都是它的顶层（我一开始还以为是父节点哪里刚create的呢）
+   * @param children 虚拟节点的childrens，一定是一个数组
+   * @param container 虚拟节点挂载的容器
    */
   const mountChildren = (children, container, parentComponent) => {
+    // children[i]可能是纯文本元素（normalize成Text虚拟节点），也可能是虚拟节点
     normalize(children);
     for (let i = 0; i < children.length; i++) {
       // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
-      // children[i]可能是纯文本元素
       patch(null, children[i], container, parentComponent); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
     }
   };
@@ -80,12 +94,14 @@ export function createRenderer(renderOptions) {
     // 将vnode身上的shapeFlags和实际的文本节点的shapeFlages进行与运算，如果大于0，则儿子元素肯定是文本节点
     // 原因是位运算的特点，如果做与运算结果大于0，说明A包含B或者B包含A，而shapeFlags本身就是或运算出来的
     if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
-      // 子元素是文本节点
+      // 子元素是文本节点（非数组）
       hostSetElementText(el, children); // 设置文本，你可以简单理解为给el这个dom的innnerText赋值
     } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
-      // 子元素是数组，既然子元素是数组（虚拟节点数组），当然要继续处理下去喽，当然使用patch就行了，但是这里单独多拉出来一个方法，是为了更好的逻辑分离
+      // 子元素是数组，既然子元素是数组（虚拟节点数组），当然要继续处理下去喽，当然使用for+patch就行了，但是这里单独多拉出来一个方法，是为了更好的逻辑分离
       mountChildren(children, el, parentComponent); // 递归挂载子元素
     }
+
+    // -- 插入到容器 --
     hostInsert(el, container);
   };
   /**
@@ -107,16 +123,21 @@ export function createRenderer(renderOptions) {
     if (n1 === null) {
       // 1. 虚拟节点要关联真实dom
       // 2，将节点插入到页面中
-
       hostInsert((n2.el = hostCreateText(n2.children)), container);
     } else {
-      debugger;
       if (n1.children !== n2.children) {
         hostSetText((n2.el = n1.el), n2.children); // 复用n1的el，并更新文本
       }
     }
   };
 
+  /**
+   * @description 针对Fragment节点的处理，这里处理的逻辑和普通元素基本一致，没有重写自己的mount和patch方法（mount传入的参数不同，patch只patchChildren）
+   * @param n1 上一次渲染的vn
+   * @param n2 本次传入的vn
+   * @param container n2的container而不是n2.el
+   * @param parentComponent 父元素的实例，用于provide和inject
+   */
   const processFragment = (n1, n2, container, parentComponent) => {
     if (n1 === null) {
       mountChildren(n2.children, container, parentComponent);
@@ -142,6 +163,10 @@ export function createRenderer(renderOptions) {
       }
     }
   };
+  /**
+   * @description 卸载子元素
+   * @param children 类似于mountChildren的逆过程
+   */
   const unmountChildren = (children) => {
     for (let i = 0; i < children.length; i++) {
       let child = children[i];
@@ -350,14 +375,23 @@ export function createRenderer(renderOptions) {
     // --- children比较 ---
     patchChildren(n1, n2, el, parentComponent);
   };
+  /**
+   * @description 更新属性或者插槽
+   * @param instance
+   * @param next
+   */
   const updateComponentPreRender = (instance, next) => {
-    // 更新属性和插槽
     instance.next = null; // 清空next
     instance.vnode = next;
     updateProps(instance, instance.props, next.props); // 更新属性
   };
+  /**
+   * @description 返回组件的render返回的subTree
+   * @param instance 组件实例
+   * @returns 返回一个vnode（subTree）
+   */
   function renderComponent(instance) {
-    const { render, vnode, proxy, props, attrs } = instance;
+    const { render, vnode, proxy, attrs } = instance;
     if (vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) {
       // 有状态组件
       return render.call(proxy, proxy);
@@ -367,6 +401,12 @@ export function createRenderer(renderOptions) {
     }
   }
 
+  /**
+   * @description 设置渲染effect
+   * @param instance 组件实例
+   * @param container 组件挂载的容器
+   * @param anchor 锚点
+   */
   function setupRenderEffect(instance, container, anchor) {
     const componentUpdate = () => {
       // 更新函数
@@ -378,7 +418,6 @@ export function createRenderer(renderOptions) {
           // 挂载前
           invokeArrayFns(bm);
         }
-
         const subTree = renderComponent(instance); // 生成subTree，由于内部使用了this，这里的this不能指向组件（考虑状态共享问题），必须指向组件实例，但是同时也不能直接指向组件实例，要指向组件实例上的proxy
         patch(null, subTree, container, anchor, instance); // 向下走一层，实现对subTree的初次挂载
         instance.isMounted = true;
@@ -395,7 +434,6 @@ export function createRenderer(renderOptions) {
           // 更新属性和插槽
           updateComponentPreRender(instance, next);
         }
-
         if (bu) {
           invokeArrayFns(bu);
         }
@@ -425,7 +463,7 @@ export function createRenderer(renderOptions) {
    * @param anchor 锚点
    */
   const mountComponent = (n2, container, anchor, parentComponent) => {
-    // 1. 先创建组件实例
+    // 1. 先创建组件实例（Instance） 并挂载到n2.component上
     const instance = (n2.component = createComponentInstance(
       n2,
       parentComponent
@@ -437,8 +475,13 @@ export function createRenderer(renderOptions) {
     // 3. 创建一个effect
     setupRenderEffect(instance, container, anchor, parentComponent);
   };
+  /**
+   * @description props是否有变化
+   * @param preProps 上一个节点的props
+   * @param newProps 本次节点的props
+   * @returns
+   */
   const hasPropsChange = (preProps, newProps) => {
-    debugger;
     // 这里prop其实是 名：类型 键值对
     let nKeys = Object.keys(newProps);
     if (nKeys.length !== Object.keys(preProps).length) {
@@ -452,10 +495,15 @@ export function createRenderer(renderOptions) {
     }
     return false;
   };
-  // 插槽更新可能也用到，所以抽离出来
+  /**
+   * @description 更新属性
+   * @param instance 组件实例
+   * @param preProps 上一次的属性
+   * @param newProps 本次的属性
+   */
   const updateProps = (instance, preProps, newProps) => {
-    debugger;
     if (hasPropsChange(preProps, newProps)) {
+      // 似乎重复了？但是考虑到不一定只在shouldComponentUpdate中调用，所以还是保留
       for (let key in newProps) {
         // 遍历新属性，如果新属性有，就赋值，没有就删除
         instance.props[key] = newProps[key];
@@ -467,8 +515,13 @@ export function createRenderer(renderOptions) {
       }
     }
   };
+  /**
+   * @description 判断组件是否需要更新
+   * @param n1 第一次节点
+   * @param n2 第二次节点
+   * @returns 返回是否需要更新的Boolean值
+   */
   const shouldComponentUpdate = (n1, n2) => {
-    debugger;
     const { props: preProps, children: prevChildren } = n1;
     const { props: newProps, children: nextChildren } = n2;
     if (prevChildren || nextChildren) return true; // 如果有插槽，直接走更新渲染即可
@@ -476,13 +529,17 @@ export function createRenderer(renderOptions) {
     // 如果属性不一样，需要更新
     return hasPropsChange(preProps, newProps); // 如果属性不一样，需要更新
   };
+  /**
+   * @description 更新组件(props或者插槽)
+   * @param n1 上一次节点
+   * @param n2 本次节点
+   */
   const updateComponent = (n1, n2) => {
     const instance = (n2.component = n1.component); // 复用组件的实例; 再次声明，组件的复用是component，元素的复用是el
     // 让更新逻辑统一
     if (shouldComponentUpdate(n1, n2)) {
-      debugger;
       instance.next = n2; // 如果调用update 有next属性，说明是属性或插槽更新
-      instance.update();
+      instance.update(); // 调用更新
     }
   };
   /**
@@ -541,7 +598,7 @@ export function createRenderer(renderOptions) {
           // 对元素处理，或初始化或复用节点
           processElement(n1, n2, container, anchor, parentComponent);
         } else if (shapeFlag & ShapeFlags.TELEPORT) {
-          // Teleport节点
+          // Teleport节点, 自己渲染更新
           type.process(n1, n2, container, anchor, parentComponent, {
             mountChildren,
             patchChildren,

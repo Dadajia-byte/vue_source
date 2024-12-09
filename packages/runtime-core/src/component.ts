@@ -20,7 +20,7 @@ export function createComponentInstance(vnode, parent) {
     update: null, // 组件的更新函数
     props: {},
     attrs: {}, // 没有$，挂载在instance上的是没有$的，实际this却是有的，原因是因为用了proxy代理映射
-    slots: {}, // 插槽
+    slots: {}, // 插槽，没有$
     propsOptions: vnode.type.props,
     // 这里需要对props有一个明确的区分
     /* 
@@ -80,10 +80,14 @@ const initProps = (instance, rawProps) => {
   instance.props = reactive(props); // props 不需要深度代理，因为组件内部是不能改外部传进来的属性的，但是我没写过shallowReactive（悲）
   instance.attrs = attrs; // 其实吧，虽说$attrs是非响应式的，到那时其实在开发环境下，它是响应式的（为了方便）
 };
-
+/**
+ * @description 初始化插槽
+ * @param instance 组件实例
+ * @param children vn子元素（组件的children就是插槽）
+ */
 const initSlots = (instance, children) => {
   if (instance.vnode.shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
-    debugger;
+    // 插槽
     instance.slots = children;
   } else {
     instance.slots = {};
@@ -112,7 +116,7 @@ const handler = {
     }
 
     // 对于一些无法修改的属性 $slots、$attrs
-    // 在外侧其实this.$attrs.要的属性 也是可以获取的，但不建议，外侧还是 proxy.$attrs.要的属性 好
+    // 在外侧其实this.$attrs.要的属性 也是可以获取的，但不建议，外侧还是 proxy.attrs.要的属性 好
     const getter = publicProperty[key]; // 通过不同策略访问对应的方法
     if (getter) {
       return getter(target);
@@ -136,6 +140,10 @@ const handler = {
   },
 };
 
+/**
+ * @description 初始化组件
+ * @param instance 组件实例
+ */
 export function setupComponent(instance) {
   const { vnode } = instance;
 
@@ -146,13 +154,15 @@ export function setupComponent(instance) {
   initSlots(instance, vnode.children);
 
   // -- 赋值代理对象 --
-  // 指向组件实例的代理对象   render(proxy)
+  // render(proxy)里的proxy就指向instance
   instance.proxy = new Proxy(instance, handler);
 
   const { data = () => {}, render, setup } = vnode.type;
 
   if (setup) {
+    // 如果写了setup函数
     const setupContext = {
+      // setup的上下文 里面有attrs,slots,expose,emit
       attrs: instance.attrs,
       slots: instance.slots,
       expose: (value) => {
@@ -164,8 +174,8 @@ export function setupComponent(instance) {
         handler && handler(...payload);
       },
     };
-    setCurrentInstance(instance);
-    const setupRes = setup(instance.props, setupContext);
+    setCurrentInstance(instance); // 设置当前全局实例，便于setup函数执行时获取当前实例（生命周期）
+    const setupRes = setup(instance.props, setupContext); // setup函数的返回值相当于一个render函数
     unsetCurrentInstance();
     if (isFunction(setupRes)) {
       instance.render = setupRes;

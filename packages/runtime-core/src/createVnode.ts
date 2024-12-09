@@ -46,7 +46,7 @@ export function createVnode(type, props, children?) {
     children,
     key: props?.key, // diff算法后面需要的key
     el: null, // 虚拟节点需要对应的真实节点是谁
-    shapeFlag, // 这玩意儿是父与子元素的shapeFlag之和，代表着虚拟节点的类型
+    shapeFlag, // children的内容代表着节点的类型
     ref: props?.ref,
   };
   if (children) {
@@ -54,7 +54,6 @@ export function createVnode(type, props, children?) {
       vnode.shapeFlag |= ShapeFlags.ARRAY_CHILDREN;
     } else if (isObject(children)) {
       // 第三个参数是对象说明是插槽
-      debugger;
       vnode.shapeFlag |= ShapeFlags.SLOTS_CHILDREN;
     } else {
       children = String(children);
