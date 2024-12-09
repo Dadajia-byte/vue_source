@@ -494,7 +494,7 @@ export function createRenderer(renderOptions) {
             unmount(n1); // 卸载n1
             n1=null;//自动会走后面的逻辑了，变成初次渲染了
         };
-        const {type,ref, shapeFlag} = n2; // 获取节点类型，针对不同类型进行不同处理
+        const {type, ref, shapeFlag} = n2; // 获取节点类型，针对不同类型进行不同处理
         switch(type) {
             case Text: // Text节点
                 processText(n1,n2,container); // 处理文本
