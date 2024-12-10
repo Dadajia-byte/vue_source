@@ -6,13 +6,13 @@ import patchAttr from "./modules/patchAttr";
 // diff
 
 export default function patchProp(el, key, prevValue, nextValue) {
-    if(key==='class') {
-        return patchClass(el, nextValue);
-    } else if (key==='style') {
-        return patchStyle(el, prevValue, nextValue);
-    } else if (/^on/.test(key)) {
-        return patchEvent(el, key, nextValue);
-    } else {
-        return patchAttr(el, key, nextValue);
-    }
-};
+  if (key === "class") {
+    return patchClass(el, nextValue);
+  } else if (key === "style") {
+    return patchStyle(el, prevValue, nextValue);
+  } else if (/^on/.test(key)) {
+    return patchEvent(el, key, nextValue);
+  } else {
+    return patchAttr(el, key, nextValue);
+  }
+}
