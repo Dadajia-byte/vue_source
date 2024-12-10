@@ -1,5 +1,5 @@
 import {isObject, isString, ShapeFlags,isFunction} from "@vue/shared";
-import { isTeleport } from "./Teleport";
+import { isTeleport } from "./components/Teleport";
 // 虽然标准但是这里的children仍可能是文本，vn数组（就算只有一个vn也必须变成数组），所以需要做判断
 export const Text = Symbol('Text');
 export const Fragment = Symbol('Fragment');

@@ -59,7 +59,7 @@ export function createRenderer(renderOptions) {
      * @param anchor 锚点，在全量diff中目前似乎没有用处
      */
     const mountElement =(vnode,container,anchor,parentComponent)=>{
-        const {type,children,props,shapeFlag} = vnode; // 解构虚拟节点，并依次处理对应的属性
+        const {type,children,props,shapeFlag,transition} = vnode; // 解构虚拟节点，并依次处理对应的属性
         // 第一次渲染的时候让虚拟节点和真实dom创建关联
         // 第二次渲染新的vnode，可以和上一次的vnode作对比，之后更新对应的el元素
 
@@ -81,7 +81,18 @@ export function createRenderer(renderOptions) {
         } else if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) { // 子元素是数组，既然子元素是数组（虚拟节点数组），当然要继续处理下去喽，当然使用patch就行了，但是这里单独多拉出来一个方法，是为了更好的逻辑分离
             mountChildren(children,el,parentComponent); // 递归挂载子元素
         }
+
+        // ---处理过渡动画--- 插入前
+        if(transition) {
+            transition.beforeEnter(el)
+        }
+        // ---挂载到容器---
         hostInsert(el,container);
+
+        // ---处理过渡动画--- 插入后
+        if(transition) {
+            transition.enter(el)
+        }
     }
     /**
      * 针对普通元素进行更新或初始化
@@ -104,7 +115,7 @@ export function createRenderer(renderOptions) {
          
             hostInsert(n2.el=hostCreateText(n2.children),container);
         } else {
-            debugger;
+            
             if(n1.children !==n2.children) {   
                 hostSetText(n2.el=n1.el,n2.children); // 复用n1的el，并更新文本
             }
@@ -329,13 +340,14 @@ export function createRenderer(renderOptions) {
         instance.next = null; // 清空next
         instance.vnode = next; 
         updateProps(instance,instance.props,next.props); // 更新属性
+        Object.assign(instance.slots,next.children); // 更新插槽
     }
     function renderComponent(instance) {
-        const {render,vnode,proxy,props,attrs} = instance;
+        const {render,vnode,proxy,props,attrs,slots} = instance;
         if(vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) { // 有状态组件
             return render.call(proxy,proxy);
         } else { // 函数式组件
-            return vnode.type(attrs)
+            return vnode.type(attrs,{slots})
         }
     }
 
@@ -407,7 +419,7 @@ export function createRenderer(renderOptions) {
         setupRenderEffect(instance,container,anchor,parentComponent);
     }
     const hasPropsChange = (preProps,newProps)=>{
-        debugger;
+        
         // 这里prop其实是 名：类型 键值对
         let nKeys = Object.keys(newProps);
         if(nKeys.length!==Object.keys(preProps).length) {
@@ -423,7 +435,7 @@ export function createRenderer(renderOptions) {
     }
     // 插槽更新可能也用到，所以抽离出来
     const updateProps = (instance,preProps,newProps) => {
-        debugger;
+        
         if(hasPropsChange(preProps,newProps)) {
             for(let key in newProps) { // 遍历新属性，如果新属性有，就赋值，没有就删除
                 instance.props[key] = newProps[key];
@@ -436,7 +448,7 @@ export function createRenderer(renderOptions) {
         }
     }
     const shouldComponentUpdate = (n1,n2)=>{
-        debugger;
+        
         const {props:preProps,children:prevChildren} = n1;
         const {props:newProps,children:nextChildren} = n2;
         if (prevChildren || nextChildren) return true; // 如果有插槽，直接走更新渲染即可
@@ -448,7 +460,7 @@ export function createRenderer(renderOptions) {
         const instance = (n2.component = n1.component); // 复用组件的实例; 再次声明，组件的复用是component，元素的复用是el
         // 让更新逻辑统一
         if(shouldComponentUpdate(n1,n2)) {
-            debugger;
+            
             instance.next = n2; // 如果调用update 有next属性，说明是属性或插槽更新
             instance.update();
         }
@@ -540,7 +552,8 @@ export function createRenderer(renderOptions) {
      * @returns 
      */
     const unmount =(vnode)=> {
-        const {shapeFlag} = vnode;
+        const {shapeFlag,transition,el} = vnode;
+        const performRemove = ()=> hostRemove(vnode.el);
         if(vnode.type===Fragment) {
             unmountChildren(vnode.children);
         } else if(shapeFlag & ShapeFlags.COMPONENT) {
@@ -549,7 +562,11 @@ export function createRenderer(renderOptions) {
         } else if(shapeFlag & ShapeFlags.TELEPORT) {
             vnode.type.remove(vnode,unmountChildren);
         } else {
-            hostRemove(vnode.el);
+            if(transition) { // 如果有transition，不能立即删除，应当延迟删除
+                transition.leave(el,performRemove);
+            } else {
+                performRemove();
+            }
         } 
     }
     // core中不关心如何渲染
