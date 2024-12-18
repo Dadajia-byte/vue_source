@@ -1,4 +1,4 @@
-import { ShapeFlags } from "@vue/shared";
+import { PatchFlags, ShapeFlags } from "@vue/shared";
 import { createVnode, Fragment, isSameVnode, Text } from "./createVnode";
 import { getSequence } from "./seq";
 import { createComponentInstance, setupComponent } from "./component";
@@ -46,10 +46,15 @@ export function createRenderer(renderOptions) {
    * @returns 规范化后的的childrens
    */
   const normalize = (children) => {
-    for (let i = 0; i < children.length; i++) {
-      if (typeof children[i] === "string" || typeof children[i] === "number") {
-        // 儿子是文本数组，可以实现简写
-        children[i] = createVnode(Text, null, String(children[i]));
+    if (Array.isArray(children)) {
+      for (let i = 0; i < children.length; i++) {
+        if (
+          typeof children[i] === "string" ||
+          typeof children[i] === "number"
+        ) {
+          // 儿子是文本数组，可以实现简写
+          children[i] = createVnode(Text, null, String(children[i]));
+        }
       }
     }
     return children;
@@ -60,12 +65,12 @@ export function createRenderer(renderOptions) {
    * @param children 虚拟节点的childrens，一定是一个数组
    * @param container 虚拟节点挂载的容器
    */
-  const mountChildren = (children, container, parentComponent) => {
+  const mountChildren = (children, container, anchor, parentComponent) => {
     // children[i]可能是纯文本元素（normalize成Text虚拟节点），也可能是虚拟节点
     normalize(children);
     for (let i = 0; i < children.length; i++) {
       // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
-      patch(null, children[i], container, parentComponent); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
+      patch(null, children[i], container, anchor, parentComponent); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
     }
   };
   /**
@@ -99,7 +104,7 @@ export function createRenderer(renderOptions) {
       hostSetElementText(el, children); // 设置文本，你可以简单理解为给el这个dom的innnerText赋值
     } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
       // 子元素是数组，既然子元素是数组（虚拟节点数组），当然要继续处理下去喽，当然使用for+patch就行了，但是这里单独多拉出来一个方法，是为了更好的逻辑分离
-      mountChildren(children, el, parentComponent); // 递归挂载子元素
+      mountChildren(children, el, anchor, parentComponent); // 递归挂载子元素
     }
 
     // ---处理过渡动画--- 插入前
@@ -126,7 +131,7 @@ export function createRenderer(renderOptions) {
       // 初始化(或者n1和n2不是一个节点强制初始化)
       mountElement(n2, container, anchor, parentComponent); // 挂载元素
     } else {
-      patchElement(n1, n2, container, parentComponent); // 非初始化，且复用节点更新
+      patchElement(n1, n2, container, anchor, parentComponent); // 非初始化，且复用节点更新
     }
   };
   const processText = (n1, n2, container) => {
@@ -148,11 +153,11 @@ export function createRenderer(renderOptions) {
    * @param container n2的container而不是n2.el
    * @param parentComponent 父元素的实例，用于provide和inject
    */
-  const processFragment = (n1, n2, container, parentComponent) => {
+  const processFragment = (n1, n2, container, anchor, parentComponent) => {
     if (n1 === null) {
-      mountChildren(n2.children, container, parentComponent);
+      mountChildren(n2.children, container, anchor, parentComponent);
     } else {
-      patchChildren(n1, n2, container, parentComponent);
+      patchChildren(n1, n2, container, anchor, parentComponent);
     }
   };
   /**
@@ -304,7 +309,7 @@ export function createRenderer(renderOptions) {
    * @param n2 新虚拟节点
    * @param el dom
    */
-  const patchChildren = (n1, n2, el, parentComponent) => {
+  const patchChildren = (n1, n2, el, anchor, parentComponent) => {
     // 比较子节点的props进行更新
     // 子节点类型 text null array
     const c1 = n1.children;
@@ -360,9 +365,20 @@ export function createRenderer(renderOptions) {
         }
         if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
           // 老文本，新数组
-          mountChildren(c2, el, parentComponent);
+          mountChildren(c2, el, anchor, parentComponent);
         }
       }
+    }
+  };
+  const patchBlockChildren = (n1, n2, el, anchor, parentComponent) => {
+    for (let i = 0; i < n2.dynamicChildren.length; i++) {
+      patch(
+        n1.dynamicChildren[i],
+        n2.dynamicChildren[i],
+        el,
+        anchor,
+        parentComponent
+      );
     }
   };
   /**
@@ -371,19 +387,43 @@ export function createRenderer(renderOptions) {
    * @param n2 此次挂载的虚拟节点
    * @description 依次对 dom、props、children 进行比较更新。
    */
-  const patchElement = (n1, n2, parentComponent) => {
+  const patchElement = (n1, n2, anchor, parentComponent) => {
     // 1. 比较元素的差异，肯定需要复用dom元素
     // 2. 比较属性和元素的子节点
     let el = (n2.el = n1.el); // 对dom元素的复用，创建引用连接，确保el修改后会对n2，n1产生影响
     let oldProps = n1.props || {};
     let newProps = n2.props || {};
 
-    // --- props比较 ---
-    // hostPatchProp 只针对一个属性进行处理 class style event attr等
-    patchProps(newProps, oldProps, el); // 比完父级比子级，一级一级比较
+    // 在比较元素的时候 针对某个特殊的属性比较
+    const { patchFlag, dynamicChildren } = n2;
+    if (patchFlag) {
+      if (patchFlag & PatchFlags.STYLE) {
+        //
+      }
+      if (patchFlag & PatchFlags.STYLE) {
+        //
+      }
+      if (patchFlag & PatchFlags.TEXT) {
+        debugger;
+        // 只要文本是动态的只比较文本
+        if (n1.children !== n2.children) {
+          return hostSetElementText(el, n2.children);
+        }
+      }
+    } else {
+      // --- props比较 ---
+      // hostPatchProp 只针对一个属性进行处理 class style event attr等
+      patchProps(newProps, oldProps, el); // 比完父级比子级，一级一级比较
+    }
 
-    // --- children比较 ---
-    patchChildren(n1, n2, el, parentComponent);
+    if (dynamicChildren) {
+      // 线性比对
+      patchBlockChildren(n1, n2, el, anchor, parentComponent);
+    } else {
+      // 全量diff
+      // --- children比较 ---
+      patchChildren(n1, n2, el, anchor, parentComponent);
+    }
   };
   /**
    * @description 更新属性或者插槽
@@ -618,7 +658,7 @@ export function createRenderer(renderOptions) {
         processText(n1, n2, container); // 处理文本
         break;
       case Fragment: // Fragment节点
-        processFragment(n1, n2, container, parentComponent); // 处理Fragment
+        processFragment(n1, n2, container, anchor, parentComponent); // 处理Fragment
         break;
       default:
         if (shapeFlag & ShapeFlags.ELEMENT) {

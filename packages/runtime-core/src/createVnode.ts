@@ -27,7 +27,7 @@ export function isSameVnode(n1, n2) {
  * @description 标准的虚拟dom创建方法，h方法其实是基于createVnode重写的，就是因为重写才导致h方法的写法多种多样，但终归是调用createVnode，它的调用就是h方法的标准写法，因此它的参数也比较固定和单一
  * @returns
  */
-export function createVnode(type, props, children?) {
+export function createVnode(type, props, children?, patchFlag?) {
   // 绝对标准的h方法，所以不用对他的参数进行多种多样的考虑，仅有一种可能
   /*判断type类型*/
   const shapeFlag = isString(type)
@@ -48,7 +48,12 @@ export function createVnode(type, props, children?) {
     el: null, // 虚拟节点需要对应的真实节点是谁
     shapeFlag, // children的内容代表着节点的类型
     ref: props?.ref,
+    patchFlag,
   };
+  if (currentBlock && patchFlag > 0) {
+    // 如果有block并且patchFlag有patchFlag，说明是动态节点，推入block中
+    currentBlock.push(vnode);
+  }
   if (children) {
     if (Array.isArray(children)) {
       vnode.shapeFlag |= ShapeFlags.ARRAY_CHILDREN;
@@ -62,3 +67,34 @@ export function createVnode(type, props, children?) {
   }
   return vnode;
 }
+
+let currentBlock = null;
+export function openBlock() {
+  currentBlock = []; // 用于收集动态节点
+}
+
+export function closeBlock() {
+  currentBlock = null;
+}
+export function setupBlock(vnode) {
+  vnode.dynamicChildren = currentBlock; // 当前elementBlock会收集子节点，用当前的block收集
+  closeBlock();
+  return vnode;
+}
+
+// 其实就是createVnode的封装，只是多了一个收集虚拟节点的功能
+export function createElementBlock(type, props, children, patchFlag?) {
+  return setupBlock(createVnode(type, props, children, patchFlag));
+}
+
+export function toDisplayString(value) {
+  return isString(value)
+    ? value
+    : value === null
+    ? ""
+    : isObject(value)
+    ? JSON.stringify(value)
+    : String(value);
+}
+
+export { createVnode as createElementVNode };

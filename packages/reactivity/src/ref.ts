@@ -79,3 +79,16 @@ export function proxyRefs(objectWithRefs) {
     },
   });
 }
+
+export function toRef(object, key) {
+  const value = object[key];
+  return isRef(value) ? value : createRef(value);
+}
+
+export const toRefs = (object) => {
+  const result = {};
+  for (let key in object) {
+    result[key] = toRef(object, key);
+  }
+  return result;
+};

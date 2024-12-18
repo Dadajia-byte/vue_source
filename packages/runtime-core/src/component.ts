@@ -45,7 +45,7 @@ export function createComponentInstance(vnode, parent) {
     parent, // 关联的父组件
     // 所有的组件provide都一样 ，parent = {...} , child = 引用对象
     provides: parent ? parent.provides : Object.create(null), // Object.create(null) 为了防止原型链上的属性干扰
-    ctx:{} as any, // 如果是keepalive组件，就将dom api放入到这个属性上
+    ctx: {} as any, // 如果是keepalive组件，就将dom api放入到这个属性上
   };
   return instance;
 }
@@ -179,8 +179,10 @@ export function setupComponent(instance) {
     const setupRes = setup(instance.props, setupContext); // setup函数的返回值相当于一个render函数
     unsetCurrentInstance();
     if (isFunction(setupRes)) {
+      // 如果返回的是函数，那么就是render函数
       instance.render = setupRes;
     } else {
+      // 如果返回的是对象，那么就是setupState
       instance.setupState = proxyRefs(setupRes || {}); // 将返回的值做ref
     }
   }
