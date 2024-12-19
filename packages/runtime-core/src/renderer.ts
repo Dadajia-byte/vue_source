@@ -458,7 +458,7 @@ export function createRenderer(renderOptions) {
    * @param container 组件挂载的容器
    * @param anchor 锚点
    */
-  function setupRenderEffect(instance, container, anchor) {
+  function setupRenderEffect(instance, container, anchor, parentComponent) {
     const componentUpdate = () => {
       // 更新函数
       // 我们要区分是第一次还是之后的更新，不然会一直叠在上面一直挂载
