@@ -62,15 +62,19 @@ export function createRenderer(renderOptions) {
 
   /**
    * 用于挂载子元素
-   * @param children 虚拟节点的childrens，一定是一个数组
+   * @param children 虚拟节点的childrens
    * @param container 虚拟节点挂载的容器
    */
   const mountChildren = (children, container, anchor, parentComponent) => {
     // children[i]可能是纯文本元素（normalize成Text虚拟节点），也可能是虚拟节点
     normalize(children);
-    for (let i = 0; i < children.length; i++) {
-      // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
-      patch(null, children[i], container, anchor, parentComponent); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
+    if (Array.isArray(children)) {
+      for (let i = 0; i < children.length; i++) {
+        // 我有时会想一个问题，类似可能这种跟顺序没关系的for使用while递减如何呢？或者干脆使用forEach，map等方法如何呢？
+        patch(null, children[i], container, anchor, parentComponent); // 啥都别说了，父节点都是初始化挂载，子节点当然也是继续挂载而不是更新，所以n1都是null
+      }
+    } else {
+      patch(null, children, container, anchor, parentComponent);
     }
   };
   /**
