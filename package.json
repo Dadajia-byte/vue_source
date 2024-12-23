@@ -6,7 +6,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev.js"
+    "dev": "node scripts/dev.js compiler-core -f esm"
   },
   "keywords": [],
   "author": "",
