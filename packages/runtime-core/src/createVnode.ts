@@ -69,12 +69,14 @@ export function createVnode(type, props, children?, patchFlag?) {
 }
 
 let currentBlock = null;
+const blockStack = [];
 export function openBlock() {
-  currentBlock = []; // 用于收集动态节点
+  // 用于收集动态节点
+  blockStack.push((currentBlock = []));
 }
 
 export function closeBlock() {
-  currentBlock = null;
+  currentBlock = blockStack.pop() || null;
 }
 export function setupBlock(vnode) {
   vnode.dynamicChildren = currentBlock; // 当前elementBlock会收集子节点，用当前的block收集
