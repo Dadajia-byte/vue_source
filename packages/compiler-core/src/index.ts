@@ -273,12 +273,14 @@ function parseChildren(context, ancestors = []) {
     nodes.push(node);
   }
 
-  // 解析完结点后可能存在很多空结点，所以需要过滤掉
+  // 解析完结点后可能存在很多空结点，所以需要过滤掉/压缩
   for(let i=0;i<nodes.length;i++) {
     let node = nodes[i];
     if(node.type === NodeTypes.TEXT) {
-      if(!/[^\t\r\n\f ]/.test(node.content)) {
+      if (!/[^\t\r\n\f ]/.test(node.content)) {
         nodes[i] = null; // 删除空格
+      } else {
+        node.content = node.content.replace(/[\t\r\n\f ]+/g, ' '); // 合并空格
       }
     }
   }
