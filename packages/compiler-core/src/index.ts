@@ -90,12 +90,69 @@ function getSelection(context, start) {
     source: context.originalSource.slice(start.offset, end.offset),
   };
 }
+
+function parseAttributeValue(context) {
+  let quote = context.source[0];
+  const isQuoted = quote === `"` || quote === `'`; // 判断引号
+  let content;
+  if (isQuoted) {
+    advanceBy(context, 1); // 跳过引号
+    const endIndex = context.source.indexOf(quote,1); // 找到结束的位置
+    content = parseTextData(context, endIndex); // 截取引号内的内容
+    advanceBy(context, 1); // 跳过引号
+  } else { // 没有引号的话
+    content = context.source.match(/([^ \t\r\n/>])+/)[1]; // 取出内容删除内容
+    advanceBy(context, content.length); // 删除取出的内容
+    advanceBySpaces(context);
+  }
+  return content;
+}
+
+
+function parseAttribute(context) {
+  const start = getCursor(context);
+  let match = /^[^\t\r\n\f />][^\t\r\n\f />=]*/.exec(context.source);
+  const name = match[0];
+  let value;
+  advanceBy(context, name.length);
+  if(/^[\t\r\n\f ]*=/.test(context.source)) {
+    advanceBySpaces(context); // 跳过等号前面可能存在的空格
+    advanceBy(context, 1); // 跳过等号
+    advanceBySpaces(context); // 跳过等号后面可能存在的空格
+    value = parseAttributeValue(context);
+  }
+  let loc = getSelection(context, start);
+  return {
+    type: NodeTypes.ATTRIBUTE,
+    name,
+    value: {
+      type: NodeTypes.TEXT,
+      content: value,
+      loc
+    },
+    loc: getSelection(context, start)
+  }
+}
+
+function parseAttributes(context) {
+  const props = [];
+  while(context.source.length>0 && !context.source.startsWith('>')) { // 上下文未解析完毕，并且还在标签内
+    props.push(parseAttribute(context));
+    advanceBySpaces(context);
+  }
+  return props;
+}
+
 function parseTag(context) {
   const start = getCursor(context);
   const match: any = /^<\/?([a-z][^ \t\r\n/>]*)/.exec(context.source);
   const tag = match[1];
   advanceBy(context, match[0].length); // 截取掉匹配的部分
   advanceBySpaces(context); // 截取掉空格避免 <div   /> 这种情况
+
+  // 处理属性 <div a="1" b='1' />
+  let props = parseAttributes(context);
+
   const isSelfClosing = context.source.startsWith("/>"); // 是否为自闭合标签
   if (isSelfClosing) {
     advanceBy(context, 2); // 是自闭合标签的话，说明只剩 />, 所以截取掉两个字符
@@ -107,6 +164,7 @@ function parseTag(context) {
     tag,
     isSelfClosing,
     loc: getSelection(context, start),
+    props,
   };
 }
 function parseElement(context, ancestors = []) {
@@ -214,7 +272,18 @@ function parseChildren(context, ancestors = []) {
     // 有限状态机
     nodes.push(node);
   }
-  return nodes;
+
+  // 解析完结点后可能存在很多空结点，所以需要过滤掉
+  for(let i=0;i<nodes.length;i++) {
+    let node = nodes[i];
+    if(node.type === NodeTypes.TEXT) {
+      if(!/[^\t\r\n\f ]/.test(node.content)) {
+        nodes[i] = null; // 删除空格
+      }
+    }
+  }
+
+  return nodes.filter(Boolean);
 }
 /**
  * @description 创建ast语法树的根节点

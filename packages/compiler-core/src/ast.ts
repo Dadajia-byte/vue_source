@@ -6,7 +6,7 @@ export enum NodeTypes {
   COMMENT,
   SIMPLE_EXPRESSION,
   INTERPOLATION, // {{ }}
-  ATTRIBUTE,
+  ATTRIBUTE, // 6
   DIRECTIVE,
   // containers
   COMPOUND_EXPRESSION, // {{ name }} + 'abc'
