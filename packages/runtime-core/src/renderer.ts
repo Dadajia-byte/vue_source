@@ -27,7 +27,7 @@ import { createComponentInstance, setupComponent } from "./component";
 import { isRef, ReactiveEffect } from "@vue/reactivity";
 import { queueJob } from "./sheduler";
 import { invokeArrayFns } from "./apiLifecycle";
-import { isKeepAlive } from "@vue/runtime-dom";
+import { isKeepAlive } from "./components/KeepAlive";
 export function createRenderer(renderOptions) {
   const {
     insert: hostInsert,
