@@ -1,3 +1,5 @@
+import { CREATE_TEXT_VNODE } from "./runtimeHelper";
+
 // 枚举类型不赋值，默认从0开始递增
 export enum NodeTypes {
   ROOT,
@@ -30,4 +32,13 @@ export enum NodeTypes {
   JS_ASSIGNMENT_EXPRESSION,
   JS_SEQUENCE_EXPRESSION,
   JS_RETURN_STATEMENT,
+}
+
+export function createCallExpression(context,args) {
+  let name = context.helper(CREATE_TEXT_VNODE);
+  return { // createTextVNode(内容，code)
+    type: NodeTypes.JS_CALL_EXPRESSION,
+    callee: name,
+    arguments: args
+  }
 }
